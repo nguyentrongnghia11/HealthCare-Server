@@ -6,12 +6,11 @@ import { AuthModule } from './modules/auth/auth.module';
 import { MongoModule } from './core/database/database.module'
 import { ConfigModule } from '@nestjs/config';
 import { NutritionModule } from './modules/nutrition/nutrition.module';
-import { AiModule } from './modules/ai/ai.module';
 
 
 
 @Module({
-  imports: [UserModule, AuthModule, MongoModule, ConfigModule.forRoot({ isGlobal: true }), NutritionModule, AiModule],
+  imports: [UserModule, AuthModule, MongoModule, ConfigModule.forRoot({ isGlobal: true }), NutritionModule],
   controllers: [AppController],
   providers: [AppService],
 })
