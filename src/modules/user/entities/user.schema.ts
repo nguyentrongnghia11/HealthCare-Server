@@ -19,29 +19,32 @@ import { Document, HydratedDocument } from "mongoose";
 })
 
 export class User {
-    @Prop({ required: true })
-    username: string
+  @Prop({ required: true })
+  username: string
 
-    @Prop({ required: true })
-    email: string
+  @Prop({ required: true })
+  email: string
 
-    @Prop({ required: true })
-    passwordHash?: string
+  @Prop({ required: function () { return this.type === 'local' }, default: null })
+  passwordHash?: string
 
-    @Prop()
-    gender?: boolean
+  @Prop()
+  gender?: boolean
 
-    @Prop()
-    birthday: Date
+  @Prop()
+  birthday: Date
 
-    @Prop()
-    height?: number
+  @Prop()
+  height?: number
 
-    @Prop()
-    weight?: number
+  @Prop()
+  weight?: number
 
-    @Prop({ type: String, enum: ["user", "admin"], default: "user" })
-    role: string
+  @Prop({ type: String, enum: ["user", "admin"], default: "user" })
+  role: string
+
+  @Prop({ type: String, enum: ["local", "google", "facebook"] })
+  type: string
 
 }
 

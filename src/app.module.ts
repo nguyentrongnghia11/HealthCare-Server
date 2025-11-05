@@ -7,11 +7,12 @@ import { MongoModule } from './core/database/database.module'
 import { ConfigModule } from '@nestjs/config';
 import { NutritionModule } from './modules/nutrition/nutrition.module';
 import { AiModule } from './modules/ai/ai.module';
+import { OtpModule } from './modules/otp/otp.module';
 
 
 
 @Module({
-  imports: [UserModule, AuthModule, MongoModule, ConfigModule.forRoot({ isGlobal: true }), NutritionModule, AiModule],
+  imports: [UserModule, AuthModule, MongoModule, ConfigModule.forRoot({ isGlobal: true }), NutritionModule, AiModule, OtpModule],
   controllers: [AppController],
   providers: [AppService],
 })
