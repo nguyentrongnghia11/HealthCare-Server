@@ -13,26 +13,40 @@ export class UserService {
   ) { }
 
   async create(createUserDto: CreateUserDto) {
+    console.log("day la create Dto ", createUserDto)
+    let userNew: UserDocument | null = null;
 
-    console.log ("day la create Dto ", createUserDto)
+    switch (createUserDto.type) {
+      case "google": {
+        userNew = await this.userModel.create(createUserDto);
+        if (!userNew) {
+           throw new InternalServerErrorException("Login google fail userservice!")
+        }
+        break;
+      }
 
-    const rs = await this.otpService.verifyOtp(createUserDto.otpCode, createUserDto.email)
-    if (!rs) {
-      throw new InternalServerErrorException("Verify otp code fail!")
+      case "local": {
+        const rs = await this.otpService.verifyOtp(createUserDto.otpCode, createUserDto.email)
+        if (!rs) {
+          throw new InternalServerErrorException("Verify otp code fail!")
+        }
+        const { password, ...user } = createUserDto
+        const hashpassword = password
+        userNew = await this.userModel.create({ ...user, passwordHash: hashpassword });
+        console.log("Day la user khoi tao ", userNew)
+
+        if (!userNew) {
+          throw new InternalServerErrorException('Create OTP failed');
+        }
+
+      }
+
     }
-
-    console.log("Day la rs ", rs)
-
-    const { password, ...user } = createUserDto
-    const hashpassword = password
-    const userNew = await this.userModel.create({ ...user, passwordHash: hashpassword });
-    console.log("Day la user khoi tao ", userNew)
-
     if (!userNew) {
-      throw new InternalServerErrorException('Create OTP failed');
+      throw new InternalServerErrorException('Create user failed');
     }
-
     return userNew;
+
   }
 
   findAll() {
@@ -58,7 +72,7 @@ export class UserService {
     return `This action removes a #${id} user`;
   }
 
-  async addType (id:string,  newType:string) {
-    return await this.userModel.findByIdAndUpdate(id, {$addToSet: {type: newType}}, { new: true })
+  async addType(id: string, newType: string) {
+    return await this.userModel.findByIdAndUpdate(id, { $addToSet: { type: newType } }, { new: true })
   }
 }

@@ -7,7 +7,8 @@ import { PassportModule } from '@nestjs/passport';
 import { LocalStrategy } from './strategies/local.strategy';
 import { PasswordService } from 'src/utils/password.util';
 import { LocalAuthGuard } from './guards/local-auth.guard';
-import { GoogleStrategy } from './auth.oauth2.service';
+import { GoogleClientProvider } from './google.provider';
+
 
 
 @Module({
@@ -21,7 +22,7 @@ import { GoogleStrategy } from './auth.oauth2.service';
     PassportModule.register({ defaultStrategy: 'google' })
   ],
   controllers: [AuthController],
-  providers: [AuthService, LocalStrategy, PasswordService, LocalAuthGuard, GoogleStrategy],
-  exports: [AuthService], // xuất ra nếu module khác cần
+  providers: [AuthService, LocalStrategy, PasswordService, LocalAuthGuard, GoogleClientProvider],
+  exports: [AuthService],
 })
 export class AuthModule {}

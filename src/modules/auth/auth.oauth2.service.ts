@@ -1,35 +1,38 @@
-import { PassportStrategy } from '@nestjs/passport';
-import { Strategy, StrategyOptionsWithRequest } from 'passport-google-oauth20';
-import { Injectable } from '@nestjs/common';
-import { Request } from 'express';
-import { ConfigService } from '@nestjs/config';
+// auth/google.controller.ts
+import { Controller, Post, Body } from '@nestjs/common';
+import { OAuth2Client } from 'google-auth-library';
+import { AuthService } from './auth.service';
+import { UserService } from '../user/user.service';
+import { UserDocument } from '../user/entities/user.schema';
 
-@Injectable()
-export class GoogleStrategy extends PassportStrategy(Strategy, 'google') {
-  constructor(private configService: ConfigService) {
-    const options: StrategyOptionsWithRequest = {
-      clientID: configService.get<string>('CLIENT_ID')!,
-      clientSecret: configService.get<string>('CLIENT_SECRET')!,
-      callbackURL: 'http://localhost:3000/v1/auth/google/callback',
-      scope: ['email', 'profile'],
-      passReqToCallback: true, 
-    };
-    super(options);
-  }
+const client = new OAuth2Client(process.env.GOOGLE_CLIENT_ID);
 
-  async validate(req: Request, accessToken: string, refreshToken: string, profile: any, done: Function) {
-    const { name, emails, photos } = profile;
-    
-    const user = {
-      email: emails?.[0]?.value,
-      firstName: name?.givenName,
-      lastName: name?.familyName,
-      picture: photos?.[0]?.value,
-      accessToken,
-    };
-    done(null, user);
+@Controller('auth')
+export class GoogleController {
+  constructor(
+    private authService: AuthService,
+    private userService: UserService,
+  ) { }
+
+  @Post('google')
+  async googleLogin(@Body('idToken') idToken: string) {
+    const ticket = await client.verifyIdToken({
+      idToken,
+      audience: process.env.GOOGLE_CLIENT_ID,
+    });
+
+    const payload: any = ticket.getPayload();
+    let user: UserDocument | null = await this.userService.findOneByEmail(payload.email);
+
+    if (!user) {
+      user = await this.userService.create({
+        email: payload.email,
+        username: payload.name,
+        type: "google"
+      });
+    }
+
+    const token = this.authService.login({ sub: user.id });
+    return { token, user };
   }
 }
-
-
-// work flow: dang nhap -> url callback?code = ?? -> lấy thông tin -? validation -> trả về data
