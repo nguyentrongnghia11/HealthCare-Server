@@ -20,7 +20,7 @@ export class UserService {
       case "google": {
         userNew = await this.userModel.create(createUserDto);
         if (!userNew) {
-           throw new InternalServerErrorException("Login google fail userservice!")
+          throw new InternalServerErrorException("Login google fail userservice!")
         }
         break;
       }
@@ -39,8 +39,17 @@ export class UserService {
           throw new InternalServerErrorException('Create OTP failed');
         }
 
+        break;
+
       }
 
+      case "facebook": {
+        userNew = await this.userModel.create(createUserDto);
+        if (!userNew) {
+          throw new InternalServerErrorException("Login facebook fail userservice!")
+        }
+        break;
+      }
     }
     if (!userNew) {
       throw new InternalServerErrorException('Create user failed');
@@ -60,12 +69,17 @@ export class UserService {
     return this.userModel.findOne({ email: email });
   }
 
+
+  findOneByFacebook(facebook_id: string) {
+    return this.userModel.findOne({ facebook_id: facebook_id });
+  }
+
   async findOneByName(name: string): Promise<User | null> {
     return await this.userModel.findOne({ name: name });
   }
 
-  update(id: number, updateUserDto: UpdateUserDto) {
-    return `This action updates a #${id} user`;
+  async update(id: number, updateUserDto: UpdateUserDto) {
+    return await this.userModel.updateOne({ _id: updateUserDto.id }, updateUserDto);
   }
 
   remove(id: number) {

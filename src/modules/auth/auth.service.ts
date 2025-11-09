@@ -93,6 +93,37 @@ export class AuthService {
         const res = await this.login(payload_token)
         return res;
     }
+
+
+    async loginFacebook(payload: any) {
+        let existingUser:UserDocument | null  = await this.userService.findOneByFacebook(payload.id) ;
+        console.log("hahah")
+        if (!existingUser) {
+            console.log("not exists")
+            const userDto = {
+                username: payload.name,
+                email: payload.email,
+                type: 'facebook',
+                password: null,
+                facebook_id: payload.id
+            };
+            try {
+                existingUser = await this.userService.create(userDto);
+
+            } catch (error) {
+                console.error('Lỗi khi tạo tài khoản Google:', error);
+                throw new InternalServerErrorException('Không thể tạo tài khoản Google mới.');
+            }
+        }
+        else {
+            console.log("exists")
+            await this.userService.addType(existingUser._id.toString(), "facebook")
+        }
+
+        const payload_token = { username: existingUser.username, email: existingUser.email, sub: existingUser._id, role: existingUser.role };
+        const res = await this.login(payload_token)
+        return res;
+    }
 }
 
 

@@ -25,6 +25,9 @@ export class User {
   @Prop({ required: true })
   email: string
 
+  @Prop({ required: function () { return this.type === 'facebook' }, default: null })
+  facebook_id: string
+
   @Prop({ required: function () { return this.type === 'local' }, default: null })
   passwordHash?: string
 
@@ -43,9 +46,11 @@ export class User {
   @Prop({ type: String, enum: ["user", "admin"], default: "user" })
   role: string
 
-  @Prop({ type: String, enum: ["local", "google", "facebook"] })
-  type: string
+  @Prop({ type: [String], enum: ["local", "google", "facebook"] })
+  type: string[]
 
+  @Prop({ type: String, required: false })
+  pricture_url: string
 }
 
 

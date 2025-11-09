@@ -8,6 +8,7 @@ import { AuthGuard } from '@nestjs/passport';
 import { UserService } from '../user/user.service';
 import { GoogleAuth } from 'google-auth-library';
 import { GoogleAuthGuads } from './guards/google-auth.guard';
+import { FacebookAuthGuads } from './guards/facebook-auth.guard';
 
 
 
@@ -35,9 +36,16 @@ export class AuthController {
   }
 
   @Post('google')
-  @UseGuards (GoogleAuthGuads)
+  @UseGuards(GoogleAuthGuads)
   async googleAuth(@Req() req: Request) {
-     return await this.authService.loginGoogle((req as any).payload)
+    return await this.authService.loginGoogle((req as any).payload)
   }
 
+
+  @Post('facebook')
+  @UseGuards(FacebookAuthGuads)
+  async facebookAuth(@Req() req: Request) {
+    console.log("req paylload ", (req as any).payload)
+    return await this.authService.loginFacebook((req as any).payload)
+  }
 }

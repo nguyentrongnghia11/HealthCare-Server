@@ -18,4 +18,7 @@ export class CreateUserDto {
     @IsString()
     @IsNotEmpty()
     type: string
+
+    @IsString()
+    facebook_id?: string
 }
