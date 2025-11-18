@@ -5,6 +5,21 @@ import { ValidationPipe } from '@nestjs/common';
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
   app.enableCors();
+  // Lightweight auth header logger to help debug route-specific 401s
+  app.use((req, _res, next) => {
+    try {
+      // Log only a short prefix of the token to avoid sensitive full-token logs
+      const auth = req.headers?.authorization;
+      if (auth) {
+        console.log('Incoming Authorization header (prefix):', auth.slice(0, 30));
+      } else {
+        console.log('Incoming request without Authorization header:', req.method, req.url);
+      }
+    } catch (err) {
+      // ignore logging errors
+    }
+    next();
+  });
   app.useGlobalPipes(
     new ValidationPipe({
       whitelist: true,

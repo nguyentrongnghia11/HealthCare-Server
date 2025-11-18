@@ -2,6 +2,23 @@
 import { Schema, Prop, SchemaFactory } from "@nestjs/mongoose";
 import { Document, HydratedDocument } from "mongoose";
 
+
+export enum ActivityLevel {
+  SEDENTARY = 'sedentary',          // Ít vận động
+  LIGHT = 'light',                  // Hoạt động nhẹ
+  MODERATE = 'moderate',            // Hoạt động vừa
+  ACTIVE = 'active',                // Hoạt động cao
+  VERY_ACTIVE = 'very_active',      // Rất cao
+}
+
+export const EXERCISE_INTENSITY_FACTOR: Record<ActivityLevel, number> = {
+  [ActivityLevel.SEDENTARY]: 1.2,
+  [ActivityLevel.LIGHT]: 1.375,
+  [ActivityLevel.MODERATE]: 1.55,
+  [ActivityLevel.ACTIVE]: 1.725,
+  [ActivityLevel.VERY_ACTIVE]: 1.9,
+};
+
 @Schema({
   collection: 'users',
   timestamps: true,
@@ -51,6 +68,31 @@ export class User {
 
   @Prop({ type: String, required: false })
   pricture_url: string
+
+
+  @Prop({ type: String, enum: Object.values(ActivityLevel), default: ActivityLevel.SEDENTARY })
+  activityLevel: string
+
+  @Prop({ type: String, enum: ["maintain", "lost", "gain"] })
+  target: string
+
+  @Prop({ type: Number, default: 0 })
+  caloGoal: number;
+
+  @Prop({ type: Number, default: 0 })
+  bmr: number;
+
+  @Prop({ type: Number, default: 0 })
+  fatGoal: number;
+
+  @Prop({ type: Number, default: 0 })
+  proteinGoal: number;
+
+  @Prop({ type: Number, default: 0 })
+  carbGoal: number;
+
+  @Prop({ type: Number, default: 0 })
+  suggestedActivityKcal: number;
 }
 
 

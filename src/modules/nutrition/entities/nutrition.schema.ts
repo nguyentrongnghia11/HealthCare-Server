@@ -8,15 +8,9 @@ import { Document, HydratedDocument } from "mongoose";
 export class Nutrition extends Document {
     @Prop({ type: String, ref: 'User', required: true })
     userId: string;
-    
-    @Prop({ type: Date, required: true })
-    date: Date;
 
-    @Prop({ type: String, required: true, enum: ['breakfast', 'lunch', 'dinner', 'snack'] })
-    mealType: string;
-
-    @Prop({ type: [String], required: true, default: [] })
-    foodName: string[];
+    @Prop({ type: String, required: true, default: "Không xác định" })
+    foodName: string;
 
     @Prop({ type: Number, required: true })
     calories: number;
@@ -29,13 +23,6 @@ export class Nutrition extends Document {
     
     @Prop({ type: Number, required: true })
     fat: number;
-    
-    @Prop({ type: String })
-    exercise?: string;
-
-    @Prop({ type: Number })
-    exerciseTime?: number; // in minutes
-
 }
 
 export type NutritionDocument = HydratedDocument<Nutrition>;

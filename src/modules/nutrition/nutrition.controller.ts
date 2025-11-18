@@ -1,4 +1,5 @@
-import { Controller, Get, Post, Body, Patch, Param, Delete, UseInterceptors, UploadedFile, UploadedFiles } from '@nestjs/common';
+import { Controller, Get, Post, Body, Patch, Param, Delete, UseInterceptors, UploadedFile, UploadedFiles, Request, UseGuards } from '@nestjs/common';
+import { AuthGuard } from '@nestjs/passport';
 import { NutritionService } from './nutrition.service';
 import { CreateNutritionDto } from './dto/create-nutrition.dto';
 import { UpdateNutritionDto } from './dto/update-nutrition.dto';
@@ -36,11 +37,26 @@ export class NutritionController {
   }
 
   @Post('analyze')
-  @UseInterceptors(FilesInterceptor('files', 5)) 
-  async analyze(@UploadedFiles() files: Express.Multer.File[]) {
-    console.log ("list files " , files)
+  @UseGuards(AuthGuard('jwt'))
+  @UseInterceptors(FilesInterceptor('files', 5))
+  async analyze(@UploadedFiles() files: Express.Multer.File[], @Request() req: any) {
+    console.log('list files ', files);
     const result = await this.nutritionService.analyzeImages(files);
-    console.log ("day la result ", result)
-    return { success: true, data: result };
+    console.log('day la result ', result);
+
+    if (result) {
+      const userId = req?.user?.sub || req?.user?._id || req?.user?.id || req?.user?.userId;
+      if (userId) {
+        (result as any).userId = userId;
+        const newMeal = await this.nutritionService.create(result as any);
+        return newMeal ? { data: newMeal } : { message: 'No analysis result available.' };
+      }
+
+      // AuthGuard ensures authentication, but in case req.user missing, return analysis
+      return { data: result, message: 'Analysis complete (no userId found on token).' };
+    }
+
+    return { message: 'No analysis result available.' };
   }
 }
+

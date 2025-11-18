@@ -20,5 +20,6 @@ export class CreateUserDto {
     type: string
 
     @IsString()
+    @IsOptional()
     facebook_id?: string
 }
