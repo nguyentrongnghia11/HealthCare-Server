@@ -8,11 +8,12 @@ import { ConfigModule } from '@nestjs/config';
 import { NutritionModule } from './modules/nutrition/nutrition.module';
 import { AiModule } from './modules/ai/ai.module';
 import { OtpModule } from './modules/otp/otp.module';
+import { RunningModule } from './running/running.module';
 
 
 
 @Module({
-  imports: [UserModule, AuthModule, MongoModule, ConfigModule.forRoot({ isGlobal: true }), NutritionModule, AiModule, OtpModule],
+  imports: [UserModule, AuthModule, MongoModule, ConfigModule.forRoot({ isGlobal: true }), NutritionModule, AiModule, OtpModule, RunningModule],
   controllers: [AppController],
   providers: [AppService],
 })

@@ -1,32 +1,36 @@
+
 import { PartialType } from '@nestjs/mapped-types';
 import { CreateUserDto } from './create-user.dto';
-import { IsBoolean, IsDate, IsNumber, IsString } from 'class-validator';
+import { IsBoolean, IsDate, IsEnum, IsNumber, IsString } from 'class-validator';
+import { Type } from 'class-transformer';
+import { ActivityLevel } from '../entities/user.schema';
 
 export class UpdateUserDto extends PartialType(CreateUserDto) {
-    @IsString()
-    id: string
-
-    @IsString()
-    username: string
-
-    @IsString()
-    email: string
-
-    @IsString()
-    password?: string
 
     @IsBoolean()
-    gender?: boolean
+    gender: boolean
 
+    @Type(() => Date)
     @IsDate()
     birthday: Date
 
     @IsNumber()
-    height?: number
+    height: number
 
     @IsNumber()
-    weight?: number
+    weight: number
+
+    @IsEnum(ActivityLevel)
+    activityLevel: ActivityLevel = ActivityLevel.SEDENTARY;
 
     @IsString()
-    role?: string
+    @IsEnum(["maintain", "lost", "gain"])
+    target: string
+
+    @IsNumber()
+    targetTimeDays: number
+    
+    @IsNumber()
+    targetWeight: number
+
 }

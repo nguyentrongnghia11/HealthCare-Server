@@ -1,10 +1,21 @@
-import { Injectable, InternalServerErrorException } from '@nestjs/common';
+import { BadRequestException, Injectable, InternalServerErrorException } from '@nestjs/common';
 import { CreateUserDto } from './dto/create-user.dto';
 import { UpdateUserDto } from './dto/update-user.dto';
 import { InjectModel } from '@nestjs/mongoose';
 import { User, UserDocument } from './entities/user.schema';
 import { Model } from 'mongoose';
 import { OtpService } from '../otp/otp.service';
+import { UpdateUserDetailDto } from './dto/update-user-detail.dto';
+
+import { EXERCISE_INTENSITY_FACTOR } from "src/modules/user/entities/user.schema";
+
+const MIN_FEMALE_CALORIES = 1200; // Giới hạn an toàn cho Nữ
+const DEFAULT_DEFICIT = 500;
+const DEFAULT_SURPLUS = 300;
+
+const MACRO_RATIO_LOSE = { PROTEIN: 0.35, FAT: 0.25, CARB: 0.40 }; // Giảm cân: Protein cao
+const MACRO_RATIO_GAIN = { PROTEIN: 0.30, FAT: 0.20, CARB: 0.50 }; // Tăng cân: Carb cao
+const MACRO_RATIO_MAINTAIN = { PROTEIN: 0.25, FAT: 0.30, CARB: 0.45 }; // Giữ cân: Cân bằng
 
 @Injectable()
 export class UserService {
@@ -78,8 +89,16 @@ export class UserService {
     return await this.userModel.findOne({ name: name });
   }
 
+  async findOneById(id: string): Promise<User | null> {
+    return await this.userModel.findOne({ _id: id });
+  }
+
   async update(id: number, updateUserDto: UpdateUserDto) {
-    return await this.userModel.updateOne({ _id: updateUserDto.id }, updateUserDto);
+    return await this.userModel.updateOne({ _id: id }, updateUserDto);
+  }
+
+  async updateDetail(id: string, updateUserDetailDto: UpdateUserDetailDto) {
+    return await this.userModel.updateOne({ _id: id }, updateUserDetailDto);
   }
 
   remove(id: number) {
@@ -89,4 +108,6 @@ export class UserService {
   async addType(id: string, newType: string) {
     return await this.userModel.findByIdAndUpdate(id, { $addToSet: { type: newType } }, { new: true })
   }
+
+  
 }
