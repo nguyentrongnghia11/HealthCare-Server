@@ -42,7 +42,7 @@ export class AuthController {
   }
 
 
-  @Post('facebook')
+  @Post('facebook') 
   @UseGuards(FacebookAuthGuads)
   async facebookAuth(@Req() req: Request) {
     console.log("req paylload ", (req as any).payload)

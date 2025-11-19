@@ -223,5 +223,26 @@ async calculateNutritionGoals(user: UpdateUserDto) {
       }
     };
   }
+
+  /**
+   * Find nutrition records for a given user on a specific date.
+   * If `dateStr` is omitted, use today's date (server local timezone).
+   * `dateStr` should be in YYYY-MM-DD format (or any string parseable by Date).
+   */
+  async findMealsByDay(userId: string, dateStr?: string) {
+    if (!userId) throw new BadRequestException('userId is required');
+
+    const date = dateStr ? new Date(dateStr) : new Date();
+    // normalize to start of day (local time)
+    const start = new Date(date.getFullYear(), date.getMonth(), date.getDate());
+    const end = new Date(start);
+    end.setDate(start.getDate() + 1);
+
+    return this.nutritionModel
+      .find({ userId: userId.toString(), createdAt: { $gte: start, $lt: end } })
+      .sort({ createdAt: 1 })
+      .lean()
+      .exec();
+  }
 }
 
