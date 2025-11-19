@@ -1,11 +1,12 @@
-import { Controller, Get, Post, Body, Patch, Param, Delete, UseInterceptors, UploadedFile, UploadedFiles, Request, UseGuards } from '@nestjs/common';
-import { AuthGuard } from '@nestjs/passport';
+import { Controller, Get, Post, Body, Patch, Param, Delete, UseInterceptors, UploadedFile, UploadedFiles, Request, UseGuards, Req, Query } from '@nestjs/common';
+import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { NutritionService } from './nutrition.service';
 import { CreateNutritionDto } from './dto/create-nutrition.dto';
 import { UpdateNutritionDto } from './dto/update-nutrition.dto';
 import { FileInterceptor, FilesInterceptor } from '@nestjs/platform-express';
 import { diskStorage } from 'multer';
 import { extname } from 'path';
+import { AuthGuard } from '@nestjs/passport';
 
 @Controller('nutrition')
 export class NutritionController {
@@ -57,6 +58,22 @@ export class NutritionController {
     }
 
     return { message: 'No analysis result available.' };
+  }
+
+  /**
+   * Get meals for the current authenticated user for a specific day.
+   * Query param: `date=YYYY-MM-DD` (optional, defaults to today)
+   */
+  @Get('me/daily')
+  @UseGuards(JwtAuthGuard)
+  async getMyDailyMeals(@Req() req: any, @Query('date') date?: string) {
+    const userId = req?.user?.sub || req?.user?._id || req?.user?.id || req?.user?.userId;
+    if (!userId) {
+      return { data: [], message: 'No user context found in token.' };
+    }
+
+    const meals = await this.nutritionService.findMealsByDay(userId.toString(), date);
+    return { data: meals };
   }
 }
 

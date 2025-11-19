@@ -1,14 +1,19 @@
-import { Controller, Get, Post, Body, Patch, Param, Delete, BadRequestException, UseGuards, Req } from '@nestjs/common';
-import { AuthGuard } from '@nestjs/passport';
+import { Controller, Get, Post, Body, Patch, Param, Delete, BadRequestException, UseGuards, Req, Query } from '@nestjs/common';
+import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { UserService } from './user.service';
 import { CreateUserDto } from './dto/create-user.dto';
 import { UpdateUserDto } from './dto/update-user.dto';
 import { UpdateUserDetailDto } from './dto/update-user-detail.dto';
 import { NutritionService } from '../nutrition/nutrition.service';
+import { RunningService } from 'src/running/running.service';
 
 @Controller('user')
 export class UserController {
-  constructor(private readonly userService: UserService, private nutritionService: NutritionService) { }
+  constructor(
+    private readonly userService: UserService,
+    private nutritionService: NutritionService,
+    private runningService: RunningService,
+  ) {}
 
   @Post()
   async create(@Body() createUserDto: CreateUserDto) {
@@ -29,7 +34,7 @@ export class UserController {
 
   // Update current authenticated user's detail using JWT
   @Patch('me/detail')
-  @UseGuards(AuthGuard('jwt'))
+  @UseGuards(JwtAuthGuard)
   async updateMyDetail(@Req() req: any, @Body() updateUserDto: UpdateUserDto) {
     console.log('PATCH /user/me/detail headers.authorization =>', req?.headers?.authorization);
     const userId = req?.user?.sub || req?.user?._id || req?.user?.id || req?.user?.userId;
@@ -59,6 +64,65 @@ export class UserController {
     userDetailDto.suggestedActivityKcal = macroGoals.suggestedActivityKcal
 
     return this.userService.updateDetail(userId.toString(), userDetailDto);
+  }
+
+  /**
+   * Calorie summary for the authenticated user for a given day.
+   * Query param: `date=YYYY-MM-DD` (optional)
+   */
+  @Get('me/calories')
+  @UseGuards(JwtAuthGuard)
+  async getMyCalorieSummary(@Req() req: any, @Query('date') date?: string) {
+    console.log("co chay vao")
+    const {email} = req?.user
+
+    console.log("userId ", email)
+    if (!email) throw new BadRequestException('Cannot determine user from token');
+
+    const user = await this.userService.findOneByEmail(email);
+
+    if (!user) {
+      throw new BadRequestException('User not found');
+    }
+
+    const meals = await this.nutritionService.findMealsByDay(user?._id.toString(), date);
+    const consumed = (meals || []).reduce((s, m: any) => s + (m.calories || 0), 0);
+
+    const runs = await this.runningService.findRunsByDay(user?._id.toString(), date);
+    const burnedFromRuns = (runs || []).reduce((s, r: any) => s + (r.calories || 0), 0);
+
+    const suggestedActivity = user?.suggestedActivityKcal || 0;
+    const totalBurned = burnedFromRuns + suggestedActivity;
+
+    const netConsumed = consumed - totalBurned;
+    const goal = user?.caloGoal || 0;
+    const remaining = Math.round(goal - netConsumed);
+
+    console.log ("tikitaka")
+
+    return {
+      user: {
+        id: user?._id.toString(),
+        bmr: user?.bmr || 0,
+        goal,
+        macroGoals: {
+          protein: user?.proteinGoal || 0,
+          fat: user?.fatGoal || 0,
+          carb: user?.carbGoal || 0,
+        },
+        suggestedActivityKcal: suggestedActivity,
+      },
+      summary: {
+        date: date || new Date().toISOString().slice(0, 10),
+        consumed,
+        burnedFromRuns,
+        totalBurned,
+        netConsumed,
+        remaining,
+      },
+      meals,
+      runs,
+    };
   }
 
   @Get(':id')

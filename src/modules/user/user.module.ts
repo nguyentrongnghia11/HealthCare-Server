@@ -6,14 +6,21 @@ import { MongooseModule, Schema } from '@nestjs/mongoose';
 import { User, UserSchema } from './entities/user.schema';
 import { OtpModule } from '../otp/otp.module';
 import { NutritionModule } from '../nutrition/nutrition.module';
+import { RunningModule } from 'src/running/running.module';
 
 @Module({
-  imports: [MongoModule, MongooseModule.forFeature([{ name: User.name, schema: UserSchema }]), OtpModule, NutritionModule],
+  imports: [
+    MongoModule,
+    MongooseModule.forFeature([{ name: User.name, schema: UserSchema }]),
+    OtpModule,
+    NutritionModule,
+    RunningModule,
+  ],
   controllers: [UserController],
   providers: [UserService],
-  exports: [UserService]
+  exports: [UserService],
 })
-export class UserModule { }
+export class UserModule {}
 
 
 
