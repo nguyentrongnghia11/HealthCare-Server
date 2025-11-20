@@ -37,21 +37,39 @@ export class UserService {
       }
 
       case "local": {
-        const rs = await this.otpService.verifyOtp(createUserDto.otpCode, createUserDto.email)
+        const rs = await this.otpService.verifyOtp(createUserDto.otpCode, createUserDto.email);
         if (!rs) {
-          throw new InternalServerErrorException("Verify otp code fail!")
+          throw new InternalServerErrorException("Verify otp code fail!");
         }
-        const { password, ...user } = createUserDto
-        const hashpassword = password
-        userNew = await this.userModel.create({ ...user, passwordHash: hashpassword });
-        console.log("Day la user khoi tao ", userNew)
 
-        if (!userNew) {
-          throw new InternalServerErrorException('Create OTP failed');
+        const { password, otpCode, ...user } = createUserDto;
+        const hashpassword = password;
+
+        const existingUser = await this.findOneByEmail(createUserDto.email);
+
+        if (existingUser) {
+          // User exists, update password and add 'local' to type array if not present
+          if (hashpassword) {
+            existingUser.passwordHash = hashpassword;
+          }
+          if (!existingUser.type.includes('local')) {
+            await this.addType(existingUser._id.toString(), 'local');
+          }
+          userNew = await existingUser.save();
+        } else {
+          // Create new user
+          userNew = await this.userModel.create({ 
+            ...user, 
+            passwordHash: hashpassword,
+            type: ['local']
+          });
+          
+          if (!userNew) {
+            throw new InternalServerErrorException('Create user failed');
+          }
         }
 
         break;
-
       }
 
       case "facebook": {
@@ -109,5 +127,5 @@ export class UserService {
     return await this.userModel.findByIdAndUpdate(id, { $addToSet: { type: newType } }, { new: true })
   }
 
-  
+
 }

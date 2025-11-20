@@ -32,14 +32,44 @@ export class UserController {
     return this.userService.findAll();
   }
 
+  /**
+   * Get current authenticated user's detail information
+   */
+  @Get('me/detail')
+  @UseGuards(JwtAuthGuard)
+  async getMyDetail(@Req() req: any) {
+    const email = req?.user?.email;
+    if (!email) throw new BadRequestException('Cannot determine user email from token');
+
+    const user = await this.userService.findOneByEmail(email);
+    if (!user) throw new BadRequestException('User not found');
+
+    return {
+      birthday: user.birthday || null,
+      gender: user.gender,
+      height: user.height || null,
+      weight: user.weight || null,
+      activityLevel: user.activityLevel || 'sedentary',
+      target: user.target || null,
+      targetWeight: user.targetWeight || null,
+      targetTimeDays: user.targetTimeDays || null,
+    };
+  }
+
   // Update current authenticated user's detail using JWT
   @Patch('me/detail')
   @UseGuards(JwtAuthGuard)
   async updateMyDetail(@Req() req: any, @Body() updateUserDto: UpdateUserDto) {
     console.log('PATCH /user/me/detail headers.authorization =>', req?.headers?.authorization);
-    const userId = req?.user?.sub || req?.user?._id || req?.user?.id || req?.user?.userId;
-    if (!userId) {
+    const {email} = req?.user;
+    if (!email) {
       throw new BadRequestException('Cannot determine user from token');
+    }
+
+    const user = await this.userService.findOneByEmail(email);
+
+    if (!user) {
+      throw new BadRequestException('User not found');
     }
 
     const {
@@ -61,9 +91,13 @@ export class UserController {
     userDetailDto.carbGoal = macroGoals.carb;
     userDetailDto.proteinGoal = macroGoals.protein;
     userDetailDto.fatGoal = macroGoals.fat;
-    userDetailDto.suggestedActivityKcal = macroGoals.suggestedActivityKcal
+    userDetailDto.suggestedActivityKcal = suggestedActivityKcal;
+    userDetailDto.targetWeight = updateUserDto.targetWeight;
+    userDetailDto.targetTimeDays = updateUserDto.targetTimeDays;
 
-    return this.userService.updateDetail(userId.toString(), userDetailDto);
+    console.log ("userDetailDto ", userDetailDto)
+
+    return this.userService.updateDetail(user._id.toString(), userDetailDto);
   }
 
   /**

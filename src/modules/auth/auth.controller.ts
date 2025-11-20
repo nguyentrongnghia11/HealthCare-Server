@@ -1,5 +1,5 @@
 import { User } from './../user/entities/user.schema';
-import { Controller, Get, Post, UseGuards, Request, Req, InternalServerErrorException } from '@nestjs/common';
+import { Controller, Get, Post, UseGuards, Request, Req, InternalServerErrorException, Headers, Body, UnauthorizedException } from '@nestjs/common';
 import { AuthService } from './auth.service';
 import { get } from 'mongoose';
 import { LoginUserDto } from './dto/login-user.dto';
@@ -20,6 +20,24 @@ export class AuthController {
     console.log("✅ AuthController initialized")
   }
 
+
+  @Get('verify')
+  async verify(@Headers('authorization') authorization: string) {
+    if (!authorization) {
+      return { valid: false, error: 'No authorization header' };
+    }
+
+    const token = authorization.replace('Bearer ', '');
+    return await this.authService.verifyToken(token);
+  }
+
+  @Post('refresh')
+  async refresh(@Body('refreshToken') refreshToken: string) {
+    if (!refreshToken) {
+      throw new UnauthorizedException('Refresh token is required');
+    }
+    return await this.authService.refreshToken(refreshToken);
+  }
 
   @Post('login')
   @UseGuards(LocalAuthGuard)
