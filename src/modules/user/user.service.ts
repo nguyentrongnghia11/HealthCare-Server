@@ -13,7 +13,7 @@ const MIN_FEMALE_CALORIES = 1200; // Giới hạn an toàn cho Nữ
 const DEFAULT_DEFICIT = 500;
 const DEFAULT_SURPLUS = 300;
 
-const MACRO_RATIO_LOSE = { PROTEIN: 0.35, FAT: 0.25, CARB: 0.40 }; // Giảm cân: Protein cao
+const MACRO_RATIO_LOST = { PROTEIN: 0.35, FAT: 0.25, CARB: 0.40 }; // Giảm cân: Protein cao
 const MACRO_RATIO_GAIN = { PROTEIN: 0.30, FAT: 0.20, CARB: 0.50 }; // Tăng cân: Carb cao
 const MACRO_RATIO_MAINTAIN = { PROTEIN: 0.25, FAT: 0.30, CARB: 0.45 }; // Giữ cân: Cân bằng
 
