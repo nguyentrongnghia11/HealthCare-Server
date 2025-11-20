@@ -76,6 +76,12 @@ export class User {
   @Prop({ type: String, enum: ["maintain", "lost", "gain"] })
   target: string
 
+  @Prop({ type: Number, required: false })
+  targetWeight?: number;
+
+  @Prop({ type: Number, required: false })
+  targetTimeDays?: number;
+
   @Prop({ type: Number, default: 0 })
   caloGoal: number;
 

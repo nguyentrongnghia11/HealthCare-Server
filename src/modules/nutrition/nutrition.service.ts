@@ -19,6 +19,8 @@ const CALORIES_PER_KG_WEIGHT_CHANGE = 7000; // Giá trị trung bình để gi�
 const MIN_FEMALE_CALORIES = 1200;
 const MIN_MALE_CALORIES = 1500;
 
+
+
 @Injectable()
 export class NutritionService {
 
@@ -57,13 +59,14 @@ export class NutritionService {
   }
 
 
-  async analyzeImages(files: Express.Multer.File[]) {
+  async analyzeImages(files: Express.Multer.File[]): Promise<CreateNutritionDto> {
     if (!files || files.length === 0) throw new Error('No files uploaded.');
 
     // 👉 Chuyển file sang base64
     const base64Images = files.map((file) => {
       const mimeType = file.mimetype || 'image/jpeg';
-      const base64Data = file.buffer.toString('base64'); // ✅ Dùng buffer thay vì fs.readFileSync
+      // ✅ Dùng buffer.toString('base64') là đúng cho Multer
+      const base64Data = file.buffer.toString('base64');
       return {
         inline_data: {
           mime_type: mimeType,
@@ -72,20 +75,48 @@ export class NutritionService {
       };
     });
 
+    // Định nghĩa Schema (khuyến nghị cho độ tin cậy cao nhất, nhưng chưa thể thêm vào prompt)
+    const jsonSchema = {
+      type: "array",
+      items: {
+        type: "object",
+        properties: {
+          name: { type: "string" },
+          total_nutrition: {
+            type: "object",
+            properties: {
+              calories: { type: "number" },
+              protein_g: { type: "number" },
+              carbs_g: { type: "number" },
+              fat_g: { type: "number" },
+            },
+            required: ["calories", "protein_g", "carbs_g", "fat_g"],
+          },
+        },
+        required: ["name", "total_nutrition"],
+      }
+    };
+
     const payload = {
       contents: [
         {
           parts: [
             {
-              text: `
-              Phân tích tất cả các món ăn trong những ảnh được cung cấp. 
-              Trả về một đối tượng JSON hợp lệ bao gồm:
-              {
-                name: food_name,
-                total_nutrition: { calories, protein_g, carbs_g, fat_g }
-              }
-              Không bao gồm ký tự \`\`\`json ở đầu hoặc \`\`\` ở cuối.
-            `,
+              text: `Phân tích tất cả các món ăn trong những ảnh được cung cấp. 
+                      Trả về **một MẢNG JSON** hợp lệ theo cấu trúc Schema sau cho món ăn chính. 
+                                CHỈ trả về JSON thuần, KHÔNG kèm lời giải thích, ký hiệu \`\`\`json, hay văn bản thừa nào khác.
+                                [
+                                  {
+                                    "name": "food_name",
+                                    "total_nutrition": { 
+                                      "calories": number, 
+                                      "protein_g": number, 
+                                      "carbs_g": number, 
+                                      "fat_g": number 
+                                    }
+                                  }
+                                ]
+                            `,
             },
             ...base64Images,
           ],
@@ -93,41 +124,74 @@ export class NutritionService {
       ],
       generation_config: {
         response_mime_type: 'application/json',
+        // response_schema: jsonSchema,
       },
     };
 
-    const response = await axios.post(`${this.apiUrl}`, JSON.stringify(payload), {
-      headers: { 'Content-Type': 'application/json' },
-
-    });
+    const response = await axios.post(
+      `${this.apiUrl}`, 
+      JSON.stringify(payload),
+      {
+        headers: { 'Content-Type': 'application/json' },
+      }
+    );
 
     if (!response.data) {
-
       Logger.debug(response.statusText);
       throw new Error(`Gemini API returned ${response.status}`);
     }
 
-    const result = await response.data;
+    const result = response.data;
     console.log("Result from gemini ", result);
+
     const text = result.candidates?.[0]?.content?.parts?.[0]?.text;
     if (!text) throw new Error('No nutrition data returned');
 
     try {
-      const parsed = JSON.parse(text);
+      let cleanedText = text.trim();
+
+      // Loại bỏ các delimiters như ```json...``` mà mô hình có thể vô tình thêm vào
+      const jsonRegex = /```json\s*([\s\S]*?)\s*```/g;
+      const match = jsonRegex.exec(cleanedText);
+
+      if (match && match[1]) {
+        cleanedText = match[1].trim();
+      } else {
+        // Loại bỏ bất kỳ ký tự trắng/ngắt dòng nào xung quanh
+        cleanedText = cleanedText.replace(/^[\s\r\n]+|[\s\r\n]+$/g, '');
+      }
+
+      // Xử lý trường hợp toàn bộ JSON bị bọc trong dấu ngoặc kép (trở thành một chuỗi)
+      if (cleanedText.startsWith('"') && cleanedText.endsWith('"')) {
+        cleanedText = JSON.parse(cleanedText);
+      }
+
+      const parsedArray = JSON.parse(cleanedText);
+
+      // Lấy phần tử đầu tiên (vì chúng ta yêu cầu một mảng JSON có 1 đối tượng)
+      const parsed = Array.isArray(parsedArray) ? parsedArray[0] : parsedArray;
+
+      if (!parsed || !parsed.name) throw new Error('Parsed data missing core fields.');
+
+      console.log("Parsed data ", parsed);
 
       const mealDto = new CreateNutritionDto();
       mealDto.foodName = parsed.name || 'Không xác định';
-      mealDto.calories = parsed.total_nutrition?.calories || 0;
-      mealDto.protein = parsed.total_nutrition?.protein_g || 0;
-      mealDto.carbs = parsed.total_nutrition?.carbs_g || 0;
-      mealDto.fat = parsed.total_nutrition?.fat_g || 0;
+      // Đảm bảo kiểu dữ liệu là number khi lấy ra
+      mealDto.calories = Number(parsed.total_nutrition?.calories) || 0;
+      mealDto.protein = Number(parsed.total_nutrition?.protein_g) || 0;
+      mealDto.carbs = Number(parsed.total_nutrition?.carbs_g) || 0;
+      mealDto.fat = Number(parsed.total_nutrition?.fat_g) || 0;
       return mealDto;
     } catch (err) {
+      // Báo lỗi chi tiết để debug
+      Logger.error(`Lỗi phân tích JSON: ${err.message}`, 'GeminiAnalysis');
+      Logger.error(`Văn bản thô không hợp lệ: ${text}`, 'GeminiAnalysis');
       throw new Error('Invalid JSON returned from Gemini');
     }
   }
 
-async calculateNutritionGoals(user: UpdateUserDto) {
+  async calculateNutritionGoals(user: UpdateUserDto) {
     const { gender, weight, height, birthday, activityLevel, target, targetWeight, targetTimeDays } = user;
 
     // 1. Kiểm tra Tham số (Giữ nguyên)
@@ -149,51 +213,51 @@ async calculateNutritionGoals(user: UpdateUserDto) {
       : (10 * weight) + (6.25 * height) - (5 * age) - 161;
 
     const factor = EXERCISE_INTENSITY_FACTOR[activityLevel] ?? 1.2;
-    const totalTDEE_Fixed = bmr * factor; 
-    
+    const totalTDEE_Fixed = bmr * factor;
+
     // TDEE NỀN TẢNG (Base TDEE - TDEE chỉ cho Sedentary)
-    const TDEE_BASE_FACTOR = 1.2; 
+    const TDEE_BASE_FACTOR = 1.2;
     const totalTDEE_Base = bmr * TDEE_BASE_FACTOR;
 
     // 5. Tính Calo Tập luyện Nền tảng (Mục tiêu Vận động Tối thiểu)
-    const baseExerciseGoal = Math.max(0, totalTDEE_Fixed - totalTDEE_Base); 
+    const baseExerciseGoal = Math.max(0, totalTDEE_Fixed - totalTDEE_Base);
 
 
     let dailyCaloriesGoal: number;
-    let currentMacroRatio:any;
+    let currentMacroRatio: any;
     let dailyAdjustmentKcal = 0; // Mức thâm hụt/thặng dư được tính toán
 
     // 6. Tính toán Thâm hụt/Thặng dư DỰA VÀO MỤC TIÊU CÂN NẶNG
     if (target === 'maintain') {
-      dailyCaloriesGoal = totalTDEE_Fixed; 
+      dailyCaloriesGoal = totalTDEE_Fixed;
       currentMacroRatio = MACRO_RATIO_MAINTAIN;
-      dailyAdjustmentKcal = 0; 
-      
+      dailyAdjustmentKcal = 0;
+
     } else {
       if (!targetWeight || !targetTimeDays || targetTimeDays <= 0) {
         throw new BadRequestException("Target weight and target time are required for this goal.");
       }
 
-      const totalWeightChange = targetWeight - weight; 
+      const totalWeightChange = targetWeight - weight;
       const totalCaloriesChange = Math.abs(totalWeightChange) * CALORIES_PER_KG_WEIGHT_CHANGE;
-      dailyAdjustmentKcal = totalCaloriesChange / targetTimeDays; 
+      dailyAdjustmentKcal = totalCaloriesChange / targetTimeDays;
 
       // 6A. Giảm cân (Lose)
       if (target === 'lose') {
         currentMacroRatio = MACRO_RATIO_LOSE;
-        
-        const maxDeficit = Math.min(dailyAdjustmentKcal, 1000); 
+
+        const maxDeficit = Math.min(dailyAdjustmentKcal, 1000);
         dailyCaloriesGoal = totalTDEE_Fixed - maxDeficit;
 
         const minLimit = isMale ? MIN_MALE_CALORIES : MIN_FEMALE_CALORIES;
         dailyCaloriesGoal = Math.max(minLimit, dailyCaloriesGoal);
-        
-      } 
+
+      }
       else if (target === 'gain') {
         currentMacroRatio = MACRO_RATIO_GAIN;
 
-        const maxSurplus = Math.min(dailyAdjustmentKcal, 500); 
-        dailyCaloriesGoal = totalTDEE_Fixed + maxSurplus; 
+        const maxSurplus = Math.min(dailyAdjustmentKcal, 500);
+        dailyCaloriesGoal = totalTDEE_Fixed + maxSurplus;
       } else {
         throw new BadRequestException("Invalid target value.");
       }
@@ -224,11 +288,7 @@ async calculateNutritionGoals(user: UpdateUserDto) {
     };
   }
 
-  /**
-   * Find nutrition records for a given user on a specific date.
-   * If `dateStr` is omitted, use today's date (server local timezone).
-   * `dateStr` should be in YYYY-MM-DD format (or any string parseable by Date).
-   */
+
   async findMealsByDay(userId: string, dateStr?: string) {
     if (!userId) throw new BadRequestException('userId is required');
 

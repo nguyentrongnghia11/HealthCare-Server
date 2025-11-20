@@ -56,10 +56,29 @@ export class AuthService {
 
     }
 
-    async refreshToken() {
+    async verifyToken(token: string) {
+        try {
+            const secret = process.env.JWT_ACCESS_SECRET || process.env.JWT_SECRET || 'super-secret-key';
+            const payload = this.jwtService.verify(token, { secret });
+            return { valid: true, payload };
+        } catch (error) {
+            return { valid: false, error: error.message };
+        }
+    }
 
-
-
+    async refreshToken(refreshToken: string) {
+        try {
+            const secret = process.env.JWT_REFRESH_SECRET || process.env.JWT_SECRET || 'super-secret-key';
+            const payload = this.jwtService.verify(refreshToken, { secret });
+            
+            // Generate new access token with same payload
+            const newPayload = { username: payload.username, email: payload.email, sub: payload.sub, role: payload.role };
+            const { access_token } = generateTokens(this.jwtService, newPayload);
+            
+            return { access_token };
+        } catch (error) {
+            throw new InternalServerErrorException('Invalid or expired refresh token');
+        }
     }
 
 

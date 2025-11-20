@@ -44,4 +44,12 @@ export class UpdateUserDetailDto extends PartialType(CreateUserDto) {
   @IsNumber()
   suggestedActivityKcal: number;
 
+  @IsNumber()
+  @IsOptional()
+  targetWeight?: number;
+
+  @IsNumber()
+  @IsOptional()
+  targetTimeDays?: number;
+
 }

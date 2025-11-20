@@ -7,10 +7,13 @@ import { FileInterceptor, FilesInterceptor } from '@nestjs/platform-express';
 import { diskStorage } from 'multer';
 import { extname } from 'path';
 import { AuthGuard } from '@nestjs/passport';
+import { UserService } from '../user/user.service';
 
 @Controller('nutrition')
 export class NutritionController {
-  constructor(private readonly nutritionService: NutritionService) { }
+  constructor(private readonly nutritionService: NutritionService,
+    private readonly userService: UserService
+  ) { }
 
   @Post()
   create(@Body() createNutritionDto: CreateNutritionDto) {
@@ -43,12 +46,16 @@ export class NutritionController {
   async analyze(@UploadedFiles() files: Express.Multer.File[], @Request() req: any) {
     console.log('list files ', files);
     const result = await this.nutritionService.analyzeImages(files);
-    console.log('day la result ', result);
+    console.log('day la result ', result)
 
     if (result) {
-      const userId = req?.user?.sub || req?.user?._id || req?.user?.id || req?.user?.userId;
-      if (userId) {
-        (result as any).userId = userId;
+      const { email } = req?.user;
+      console.log ("email from token ", email)
+      const user = await this.userService.findOneByEmail(email);
+      console.log ("user from token ", user)
+      if (user) {
+        (result as any).userId = user._id;
+        console.log ("userId to save meal ", result)
         const newMeal = await this.nutritionService.create(result as any);
         return newMeal ? { data: newMeal } : { message: 'No analysis result available.' };
       }
