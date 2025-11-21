@@ -109,4 +109,25 @@ export class NutritionController {
     const result = await this.nutritionService.create(nutritionData);
     return { data: result };
   }
+
+  /**
+   * Get aggregated nutrition statistics with daily or weekly grouping
+   * Query params: startDate, endDate (YYYY-MM-DD), groupBy ('day' or 'week')
+   */
+  @Get('me/stats')
+  @UseGuards(JwtAuthGuard)
+  async getMyStats(
+    @Req() req: any,
+    @Query('startDate') startDate: string,
+    @Query('endDate') endDate: string,
+    @Query('groupBy') groupBy: 'day' | 'week'
+  ) {
+    const email = req?.user?.email;
+    if (!email) throw new BadRequestException('Cannot determine user email from token');
+
+    const user = await this.userService.findOneByEmail(email);
+    if (!user) throw new BadRequestException('User not found');
+
+    return this.nutritionService.aggregateStats(user._id.toString(), startDate, endDate, groupBy);
+  }
 }
