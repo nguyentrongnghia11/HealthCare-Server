@@ -10,7 +10,7 @@ import { EXERCISE_INTENSITY_FACTOR } from '../user/entities/user.schema';
 import { UpdateUserDto } from '../user/dto/update-user.dto';
 
 
-const MACRO_RATIO_LOSE = { PROTEIN: 0.35, FAT: 0.25, CARB: 0.40 };
+const MACRO_RATIO_LOST = { PROTEIN: 0.35, FAT: 0.25, CARB: 0.40 };
 const MACRO_RATIO_GAIN = { PROTEIN: 0.30, FAT: 0.20, CARB: 0.50 };
 const MACRO_RATIO_MAINTAIN = { PROTEIN: 0.25, FAT: 0.30, CARB: 0.45 };
 
@@ -242,9 +242,9 @@ export class NutritionService {
       const totalCaloriesChange = Math.abs(totalWeightChange) * CALORIES_PER_KG_WEIGHT_CHANGE;
       dailyAdjustmentKcal = totalCaloriesChange / targetTimeDays;
 
-      // 6A. Giảm cân (Lose)
-      if (target === 'lose') {
-        currentMacroRatio = MACRO_RATIO_LOSE;
+      // 6A. Giảm cân (Lost)
+      if (target === 'lost') {
+        currentMacroRatio = MACRO_RATIO_LOST;
 
         const maxDeficit = Math.min(dailyAdjustmentKcal, 1000);
         dailyCaloriesGoal = totalTDEE_Fixed - maxDeficit;

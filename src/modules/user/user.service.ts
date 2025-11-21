@@ -6,6 +6,7 @@ import { User, UserDocument } from './entities/user.schema';
 import { Model } from 'mongoose';
 import { OtpService } from '../otp/otp.service';
 import { UpdateUserDetailDto } from './dto/update-user-detail.dto';
+import { Types } from 'mongoose';
 
 import { EXERCISE_INTENSITY_FACTOR } from "src/modules/user/entities/user.schema";
 
@@ -13,7 +14,7 @@ const MIN_FEMALE_CALORIES = 1200; // Giới hạn an toàn cho Nữ
 const DEFAULT_DEFICIT = 500;
 const DEFAULT_SURPLUS = 300;
 
-const MACRO_RATIO_LOSE = { PROTEIN: 0.35, FAT: 0.25, CARB: 0.40 }; // Giảm cân: Protein cao
+const MACRO_RATIO_LOST = { PROTEIN: 0.35, FAT: 0.25, CARB: 0.40 }; // Giảm cân: Protein cao
 const MACRO_RATIO_GAIN = { PROTEIN: 0.30, FAT: 0.20, CARB: 0.50 }; // Tăng cân: Carb cao
 const MACRO_RATIO_MAINTAIN = { PROTEIN: 0.25, FAT: 0.30, CARB: 0.45 }; // Giữ cân: Cân bằng
 
@@ -37,9 +38,11 @@ export class UserService {
       }
 
       case "local": {
-        const rs = await this.otpService.verifyOtp(createUserDto.otpCode, createUserDto.email);
-        if (!rs) {
-          throw new InternalServerErrorException("Verify otp code fail!");
+        if (createUserDto.otpCode) {
+            const rs = await this.otpService.verifyOtp(createUserDto.otpCode, createUserDto.email);
+            if (!rs) {
+              throw new InternalServerErrorException("Verify otp code fail!");
+            }
         }
 
         const { password, otpCode, ...user } = createUserDto;
@@ -61,7 +64,8 @@ export class UserService {
           userNew = await this.userModel.create({ 
             ...user, 
             passwordHash: hashpassword,
-            type: ['local']
+            type: ['local'],
+            role: createUserDto.role || 'user'
           });
           
           if (!userNew) {
@@ -91,10 +95,12 @@ export class UserService {
     return this.userModel.find();
   }
 
+  // Keep compatibility wrapper: older callers that pass a numeric id will still work
   findOne(id: number) {
-    return `This action returns a #${id} user`;
+    return this.findOneById(String(id));
   }
-  findOneByEmail(email: string) {
+
+  async findOneByEmail(email: string) {
     return this.userModel.findOne({ email: email });
   }
 
@@ -103,24 +109,34 @@ export class UserService {
     return this.userModel.findOne({ facebook_id: facebook_id });
   }
 
-  async findOneByName(name: string): Promise<User | null> {
-    return await this.userModel.findOne({ name: name });
+  async findOneByName(username: string): Promise<User | null> {
+    return await this.userModel.findOne({ username: username });
   }
 
   async findOneById(id: string): Promise<User | null> {
-    return await this.userModel.findOne({ _id: id });
+    return await this.userModel.findById(id);
   }
 
-  async update(id: number, updateUserDto: UpdateUserDto) {
+  // Update accepts ObjectId string and returns UpdateResult
+  async update(id: string, updateUserDto: UpdateUserDto) {
+    if (!id || !Types.ObjectId.isValid(id)) {
+      throw new BadRequestException('Invalid user id');
+    }
     return await this.userModel.updateOne({ _id: id }, updateUserDto);
   }
 
   async updateDetail(id: string, updateUserDetailDto: UpdateUserDetailDto) {
+    if (!id || !Types.ObjectId.isValid(id)) {
+      throw new BadRequestException('Invalid user id');
+    }
     return await this.userModel.updateOne({ _id: id }, updateUserDetailDto);
   }
 
-  remove(id: number) {
-    return `This action removes a #${id} user`;
+  async remove(id: string) {
+    if (!id || !Types.ObjectId.isValid(id)) {
+      throw new BadRequestException('Invalid user id');
+    }
+    return await this.userModel.findByIdAndDelete(id);
   }
 
   async addType(id: string, newType: string) {

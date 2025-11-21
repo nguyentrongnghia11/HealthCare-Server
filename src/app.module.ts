@@ -9,11 +9,11 @@ import { NutritionModule } from './modules/nutrition/nutrition.module';
 import { AiModule } from './modules/ai/ai.module';
 import { OtpModule } from './modules/otp/otp.module';
 import { RunningModule } from './running/running.module';
-
+import { CycleModule } from './modules/cycle/cycle.module';
 
 
 @Module({
-  imports: [UserModule, AuthModule, MongoModule, ConfigModule.forRoot({ isGlobal: true }), NutritionModule, AiModule, OtpModule, RunningModule],
+  imports: [UserModule, AuthModule, MongoModule, ConfigModule.forRoot({ isGlobal: true }), NutritionModule,CycleModule, AiModule, OtpModule, RunningModule],
   controllers: [AppController],
   providers: [AppService],
 })
