@@ -304,5 +304,142 @@ export class NutritionService {
       .lean()
       .exec();
   }
+
+  /**
+   * Aggregate nutrition stats by day or week
+   * @param userId User ID
+   * @param startDate Start date (YYYY-MM-DD)
+   * @param endDate End date (YYYY-MM-DD)
+   * @param groupBy 'day' or 'week'
+   */
+  async aggregateStats(userId: string, startDate: string, endDate: string, groupBy: 'day' | 'week') {
+    if (!userId) throw new BadRequestException('userId is required');
+    if (!startDate || !endDate) throw new BadRequestException('startDate and endDate are required');
+    if (groupBy !== 'day' && groupBy !== 'week') throw new BadRequestException('groupBy must be "day" or "week"');
+
+    const start = new Date(startDate);
+    const end = new Date(endDate);
+    end.setDate(end.getDate() + 1); // Include end date
+
+    // Fetch all meals in range
+    const meals = await this.nutritionModel.find({
+      userId: userId.toString(),
+      createdAt: { $gte: start, $lt: end }
+    }).sort({ createdAt: 1 }).lean().exec() as any[];
+
+    // Initialize stats map
+    const statsMap = new Map<string, {
+      date: string;
+      calories: number;
+      protein: number;
+      carbs: number;
+      fat: number;
+      meals: number;
+    }>();
+
+    if (groupBy === 'day') {
+      // Initialize all dates in range with zero values
+      const current = new Date(start);
+      while (current < end) {
+        const dateKey = current.toISOString().split('T')[0];
+        statsMap.set(dateKey, {
+          date: dateKey,
+          calories: 0,
+          protein: 0,
+          carbs: 0,
+          fat: 0,
+          meals: 0
+        });
+        current.setDate(current.getDate() + 1);
+      }
+
+      // Aggregate meals by day
+      meals.forEach((meal: any) => {
+        const dateKey = new Date(meal.createdAt).toISOString().split('T')[0];
+        const stat = statsMap.get(dateKey);
+        if (stat) {
+          stat.calories += meal.calories || 0;
+          stat.protein += meal.protein || 0;
+          stat.carbs += meal.carbs || 0;
+          stat.fat += meal.fat || 0;
+          stat.meals += 1;
+        }
+      });
+    } else {
+      // Weekly grouping - group by Monday (ISO 8601 week start)
+      const getMonday = (date: Date): string => {
+        const d = new Date(date);
+        const day = d.getDay();
+        const diff = day === 0 ? -6 : 1 - day; // Adjust to Monday
+        d.setDate(d.getDate() + diff);
+        return d.toISOString().split('T')[0];
+      };
+
+      // Initialize weeks in range
+      const current = new Date(start);
+      const seenWeeks = new Set<string>();
+      while (current < end) {
+        const monday = getMonday(current);
+        if (!seenWeeks.has(monday)) {
+          seenWeeks.add(monday);
+          statsMap.set(monday, {
+            date: monday,
+            calories: 0,
+            protein: 0,
+            carbs: 0,
+            fat: 0,
+            meals: 0
+          });
+        }
+        current.setDate(current.getDate() + 1);
+      }
+
+      // Aggregate meals by week
+      meals.forEach((meal: any) => {
+        const monday = getMonday(new Date(meal.createdAt));
+        const stat = statsMap.get(monday);
+        if (stat) {
+          stat.calories += meal.calories || 0;
+          stat.protein += meal.protein || 0;
+          stat.carbs += meal.carbs || 0;
+          stat.fat += meal.fat || 0;
+          stat.meals += 1;
+        }
+      });
+    }
+
+    // Convert map to sorted array with chart-friendly format
+    const stats = Array.from(statsMap.values()).map(stat => ({
+      date: stat.date,
+      calories: Math.round(stat.calories),
+      protein: parseFloat(stat.protein.toFixed(1)),
+      carbs: parseFloat(stat.carbs.toFixed(1)),
+      fat: parseFloat(stat.fat.toFixed(1)),
+      meals: stat.meals
+    }));
+
+    // Prepare data arrays for charts (labels and values separated)
+    const chartData = {
+      labels: stats.map(s => s.date),
+      datasets: {
+        calories: stats.map(s => s.calories),
+        protein: stats.map(s => s.protein),
+        carbs: stats.map(s => s.carbs),
+        fat: stats.map(s => s.fat),
+        meals: stats.map(s => s.meals)
+      }
+    };
+
+    // Calculate summary totals
+    const summary = {
+      totalCalories: Math.round(meals.reduce((sum: number, m: any) => sum + (m.calories || 0), 0)),
+      totalProtein: parseFloat(meals.reduce((sum: number, m: any) => sum + (m.protein || 0), 0).toFixed(1)),
+      totalCarbs: parseFloat(meals.reduce((sum: number, m: any) => sum + (m.carbs || 0), 0).toFixed(1)),
+      totalFat: parseFloat(meals.reduce((sum: number, m: any) => sum + (m.fat || 0), 0).toFixed(1)),
+      totalMeals: meals.length
+    };
+
+    return { stats, chartData, summary };
+  }
 }
 
