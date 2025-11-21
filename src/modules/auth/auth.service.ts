@@ -32,25 +32,71 @@ export class AuthService {
         };
     }
 
+    // async validateUser(identifier: string, password: string) {
+    //     console.log('validateUser - identifier:', identifier);
+
+    //     let user: any = await this.userService.findOneByEmail(identifier);
+    //     if (!user) {
+    //         user = await this.userService.findOneByName(identifier);
+    //     }
+
+    //     console.log('User found:', user ? 'Yes' : 'No');
+    //     if (!user) return null;
+
+    //     const { passwordHash } = user;
+    //     // const isPasswordValid = this.passwordService.comparePassword(password, passwordHash || "");
+
+    //     // console.log("Password valid:", isPasswordValid);
+
+    //     // if (!isPasswordValid) return null;
+    //     return user;
+    // }
+
     async validateUser(identifier: string, password: string) {
-        console.log('validateUser - identifier:', identifier);
+    console.log('-------------------------------------------');
+    console.log('🔍 BE [validateUser]: Đang kiểm tra đăng nhập');
+    console.log('👉 Identifier (Email/User) nhận được:', identifier);
+    console.log('👉 Password nhận được:', password);
 
-        let user: any = await this.userService.findOneByEmail(identifier);
-        if (!user) {
-            user = await this.userService.findOneByName(identifier);
-        }
-
-        console.log('User found:', user ? 'Yes' : 'No');
-        if (!user) return null;
-
-        const { passwordHash } = user;
-        // const isPasswordValid = this.passwordService.comparePassword(password, passwordHash || "");
-
-        // console.log("Password valid:", isPasswordValid);
-
-        // if (!isPasswordValid) return null;
-        return user;
+    // 1. Tìm User
+    let user: any = await this.userService.findOneByEmail(identifier);
+    if (!user) {
+        user = await this.userService.findOneByName(identifier);
     }
+
+    if (!user) {
+        console.log('❌ BE: Không tìm thấy User trong Database!');
+        return null; // Trả về null => Frontend nhận lỗi 401 Unauthorized
+    }
+
+    console.log('✅ BE: Đã tìm thấy User:', { 
+        id: user._id, 
+        email: user.email, 
+        role: user.role,
+        hasPasswordHash: !!user.passwordHash 
+    });
+
+    // 2. Kiểm tra mật khẩu
+    // (LƯU Ý: Bạn cần uncomment đoạn check pass này để test thật)
+    if (user.passwordHash) {
+         // const isMatch = await this.passwordService.comparePassword(password, user.passwordHash);
+         
+         // Tạm thời log so sánh thô nếu bạn chưa hash (chỉ dùng để debug)
+         const isMatch = password === user.passwordHash; 
+         
+         console.log(`🔐 BE: Check Pass: Nhập [${password}] vs DB [${user.passwordHash}] => Kết quả: ${isMatch}`);
+
+         if (!isMatch) {
+             console.log('❌ BE: Sai mật khẩu!');
+             return null;
+         }
+    } else {
+        console.log('⚠️ BE: User này không có passwordHash (Có thể là user Google/FB?)');
+    }
+
+    console.log('🎉 BE: Login hợp lệ! Cho phép đi tiếp.');
+    return user;
+}
 
     async logout() {
 
