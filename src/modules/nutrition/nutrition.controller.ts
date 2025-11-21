@@ -1,8 +1,9 @@
-import { Controller, Get, Post, Body, Patch, Param, Delete, UseInterceptors, UploadedFile, UploadedFiles, Request, UseGuards, Req, Query } from '@nestjs/common';
+import { Controller, Get, Post, Body, Patch, Param, Delete, UseInterceptors, UploadedFile, UploadedFiles, Request, UseGuards, Req, Query, BadRequestException } from '@nestjs/common';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { NutritionService } from './nutrition.service';
 import { CreateNutritionDto } from './dto/create-nutrition.dto';
 import { UpdateNutritionDto } from './dto/update-nutrition.dto';
+import { ManualNutritionDto } from './dto/manual-nutrition.dto';
 import { FileInterceptor, FilesInterceptor } from '@nestjs/platform-express';
 import { diskStorage } from 'multer';
 import { extname } from 'path';
@@ -82,5 +83,30 @@ export class NutritionController {
     const meals = await this.nutritionService.findMealsByDay(userId.toString(), date);
     return { data: meals };
   }
-}
 
+  /**
+   * Add nutrition manually (without AI analysis)
+   * Body: { foodName, calories, protein, carbs, fat, date? }
+   */
+  @Post('me/manual')
+  @UseGuards(JwtAuthGuard)
+  async addManualNutrition(@Req() req: any, @Body() body: ManualNutritionDto) {
+    const email = req?.user?.email;
+    if (!email) throw new BadRequestException('Cannot determine user email from token');
+
+    const user = await this.userService.findOneByEmail(email);
+    if (!user) throw new BadRequestException('User not found');
+
+    const nutritionData: CreateNutritionDto = {
+      userId: user._id.toString(),
+      foodName: body.foodName,
+      calories: body.calories,
+      protein: body.protein,
+      carbs: body.carbs,
+      fat: body.fat,
+    };
+
+    const result = await this.nutritionService.create(nutritionData);
+    return { data: result };
+  }
+}
