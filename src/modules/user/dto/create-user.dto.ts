@@ -12,6 +12,7 @@ export class CreateUserDto {
     @MinLength(8)
     password?: string | null;
 
+    @IsOptional()
     @IsString()
     otpCode?: string;
 
@@ -22,4 +23,8 @@ export class CreateUserDto {
     @IsString()
     @IsOptional()
     facebook_id?: string
+
+    @IsOptional()
+    @IsString()
+    role?: string;
 }

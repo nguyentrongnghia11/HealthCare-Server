@@ -6,6 +6,7 @@ import { UpdateUserDto } from './dto/update-user.dto';
 import { UpdateUserDetailDto } from './dto/update-user-detail.dto';
 import { NutritionService } from '../nutrition/nutrition.service';
 import { RunningService } from 'src/running/running.service';
+import { Types } from 'mongoose';
 
 @Controller('user')
 export class UserController {
@@ -161,16 +162,26 @@ export class UserController {
 
   @Get(':id')
   findOne(@Param('id') id: string) {
-    return this.userService.findOne(+id);
+    if (!id || id === 'undefined' || !Types.ObjectId.isValid(id)) {
+      throw new BadRequestException('Invalid user id');
+    }
+    return this.userService.findOneById(id);
   }
 
   @Patch(':id')
   update(@Param('id') id: string, @Body() updateUserDto: UpdateUserDto) {
-    return this.userService.update(+id, updateUserDto);
+    if (!id || id === 'undefined' || !Types.ObjectId.isValid(id)) {
+      throw new BadRequestException('Invalid user id');
+    }
+    return this.userService.update(id, updateUserDto);
   }
 
   @Patch(':id/detail')
   async updateDetail(@Param('id') id: string, @Body() updateUserDto: UpdateUserDto) {
+    if (!id || id === 'undefined' || !Types.ObjectId.isValid(id)) {
+      throw new BadRequestException('Invalid user id');
+    }
+
     const user = await this.userService.findOneById(id);
 
     if (!user) {
@@ -199,10 +210,11 @@ export class UserController {
     return this.userService.updateDetail(id, userDetailDto);
   }
 
-  
-
   @Delete(':id')
   remove(@Param('id') id: string) {
-    return this.userService.remove(+id);
+    if (!id || id === 'undefined' || !Types.ObjectId.isValid(id)) {
+      throw new BadRequestException('Invalid user id');
+    }
+    return this.userService.remove(id);
   }
 }
