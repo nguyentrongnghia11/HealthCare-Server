@@ -107,7 +107,7 @@ export class RunningController {
     return {
       sessions: formattedSessions,
       summary: {
-        totalDistanceKm: parseFloat(totalDistanceKm.toFixed(1)),
+        totalDistanceKm: parseFloat(totalDistanceKm.toFixed(2)),
         totalCaloriesBurned: Math.round(totalCaloriesBurned),
         totalTimeSeconds: Math.round(totalTimeSeconds),
         sessionCount,

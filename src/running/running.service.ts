@@ -165,7 +165,7 @@ export class RunningService {
       });
     }
 
-    // Convert map to sorted array
+    // Convert map to sorted array with chart-friendly format
     const stats = Array.from(statsMap.values()).map(stat => ({
       date: stat.date,
       distanceKm: parseFloat(stat.distanceKm.toFixed(1)),
@@ -173,6 +173,17 @@ export class RunningService {
       durationSec: Math.round(stat.durationSec),
       sessions: stat.sessions
     }));
+
+    // Prepare data arrays for charts (labels and values separated)
+    const chartData = {
+      labels: stats.map(s => s.date),
+      datasets: {
+        distanceKm: stats.map(s => s.distanceKm),
+        calories: stats.map(s => s.calories),
+        durationSec: stats.map(s => s.durationSec),
+        sessions: stats.map(s => s.sessions)
+      }
+    };
 
     // Calculate summary totals
     const summary = {
@@ -182,6 +193,6 @@ export class RunningService {
       totalSessions: sessions.length
     };
 
-    return { stats, summary };
+    return { stats, chartData, summary };
   }
 }

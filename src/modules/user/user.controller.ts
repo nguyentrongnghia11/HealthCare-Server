@@ -6,6 +6,7 @@ import { UpdateUserDto } from './dto/update-user.dto';
 import { UpdateUserDetailDto } from './dto/update-user-detail.dto';
 import { NutritionService } from '../nutrition/nutrition.service';
 import { RunningService } from 'src/running/running.service';
+import { Types } from 'mongoose';
 
 @Controller('user')
 export class UserController {
@@ -161,16 +162,26 @@ export class UserController {
 
   @Get(':id')
   findOne(@Param('id') id: string) {
-    return this.userService.findOne(+id);
+    if (!id || id === 'undefined' || !Types.ObjectId.isValid(id)) {
+      throw new BadRequestException('Invalid user id');
+    }
+    return this.userService.findOneById(id);
   }
 
   @Patch(':id')
   update(@Param('id') id: string, @Body() updateUserDto: UpdateUserDto) {
-    return this.userService.update(+id, updateUserDto);
+    if (!id || id === 'undefined' || !Types.ObjectId.isValid(id)) {
+      throw new BadRequestException('Invalid user id');
+    }
+    return this.userService.update(id, updateUserDto);
   }
 
   @Patch(':id/detail')
   async updateDetail(@Param('id') id: string, @Body() updateUserDto: UpdateUserDto) {
+    if (!id || id === 'undefined' || !Types.ObjectId.isValid(id)) {
+      throw new BadRequestException('Invalid user id');
+    }
+
     const user = await this.userService.findOneById(id);
 
     if (!user) {
@@ -199,10 +210,47 @@ export class UserController {
     return this.userService.updateDetail(id, userDetailDto);
   }
 
-  
-
   @Delete(':id')
   remove(@Param('id') id: string) {
-    return this.userService.remove(+id);
+    if (!id || id === 'undefined' || !Types.ObjectId.isValid(id)) {
+      throw new BadRequestException('Invalid user id');
+    }
+    return this.userService.remove(id);
+  }
+
+  /**
+   * Get weekly health statistics for authenticated user
+   * Aggregates last 7 days of steps, water, sleep, and calories burned from running
+   */
+  @Get('me/weekly-stats')
+  @UseGuards(JwtAuthGuard)
+  async getMyWeeklyStats(@Req() req: any, @Query('endDate') endDate?: string) {
+    const email = req?.user?.email;
+    if (!email) throw new BadRequestException('Cannot determine user email from token');
+
+    const user = await this.userService.findOneByEmail(email);
+    if (!user) throw new BadRequestException('User not found');
+
+    // Get health tracking stats (steps, water, sleep)
+    const stats = await this.userService.getWeeklyStats(user._id.toString(), endDate);
+
+    // Calculate calories burned from running (last 7 days)
+    const end = endDate ? new Date(endDate) : new Date();
+    const start = new Date(end);
+    start.setDate(start.getDate() - 6);
+    
+    const startStr = start.toISOString().split('T')[0];
+    const endStr = end.toISOString().split('T')[0];
+
+    const runningStats = await this.runningService.aggregateStats(
+      user._id.toString(),
+      startStr,
+      endStr,
+      'day'
+    );
+
+    stats.caloriesBurned = runningStats.summary.totalCalories;
+
+    return stats;
   }
 }
