@@ -4,6 +4,7 @@ import { UpdateUserDto } from './dto/update-user.dto';
 import { InjectModel } from '@nestjs/mongoose';
 import { User, UserDocument } from './entities/user.schema';
 import { HealthTracking, HealthTrackingDocument } from './entities/health-tracking.schema';
+import { SleepSchedule, SleepScheduleDocument } from './entities/sleep.schema';
 import { Model } from 'mongoose';
 import { OtpService } from '../otp/otp.service';
 import { UpdateUserDetailDto } from './dto/update-user-detail.dto';
@@ -24,6 +25,7 @@ export class UserService {
   constructor(
     @InjectModel(User.name) private readonly userModel: Model<UserDocument>,
     @InjectModel(HealthTracking.name) private readonly healthTrackingModel: Model<HealthTrackingDocument>,
+    @InjectModel(SleepSchedule.name) private readonly sleepModel: Model<SleepScheduleDocument>,
     private otpService: OtpService
   ) { }
 
@@ -181,20 +183,135 @@ export class UserService {
    * Update or create daily health tracking record
    * @param userId User ID
    * @param date Date (YYYY-MM-DD)
-   * @param data Health data to update
+   * @param data Health data to update (supports steps, waterMl, sleepMinutes, bedtime, wakeup)
    */
-  async updateDailyHealth(userId: string, date: string, data: { steps?: number; waterMl?: number; sleepMinutes?: number }) {
+  async updateDailyHealth(userId: string, date: string, data: { steps?: number; waterMl?: number; sleepMinutes?: number; bedtime?: string; wakeup?: string }) {
     if (!userId) throw new BadRequestException('userId is required');
     if (!date) throw new BadRequestException('date is required');
 
     const dateObj = new Date(date);
     dateObj.setHours(0, 0, 0, 0);
+    const update: any = { ...data, userId: userId.toString(), date: dateObj };
+    // Only set fields that are defined (avoid overwriting with undefined)
+    const setObj: any = {};
+    if (typeof data.steps !== 'undefined') setObj.steps = data.steps;
+    if (typeof data.waterMl !== 'undefined') setObj.waterMl = data.waterMl;
+    if (typeof data.sleepMinutes !== 'undefined') setObj.sleepMinutes = data.sleepMinutes;
+    if (typeof data.bedtime !== 'undefined') setObj.bedtime = data.bedtime;
+    if (typeof data.wakeup !== 'undefined') setObj.wakeup = data.wakeup;
 
     return await this.healthTrackingModel.findOneAndUpdate(
       { userId: userId.toString(), date: dateObj },
-      { $set: { ...data, userId: userId.toString(), date: dateObj } },
+      { $set: { ...setObj, userId: userId.toString(), date: dateObj } },
       { upsert: true, new: true }
     ).lean().exec();
+  }
+
+  /**
+   * Get daily health tracking record for a user and date
+   */
+  async getDailyHealth(userId: string, date: string) {
+    if (!userId) throw new BadRequestException('userId is required');
+    if (!date) throw new BadRequestException('date is required');
+    const dateObj = new Date(date);
+    dateObj.setHours(0, 0, 0, 0);
+    return await this.healthTrackingModel.findOne({ userId: userId.toString(), date: dateObj }).lean().exec();
+  }
+
+  /**
+   * Get latest health tracking record for user
+   */
+  async getLatestDailyHealth(userId: string) {
+    if (!userId) throw new BadRequestException('userId is required');
+    return await this.healthTrackingModel.findOne({ userId: userId.toString() }).sort({ date: -1 }).lean().exec();
+  }
+
+  // ------------------ SleepSchedule helpers ------------------
+  async getSleepByDate(userId: string, date: string) {
+    if (!userId) throw new BadRequestException('userId is required');
+    if (!date) throw new BadRequestException('date is required');
+    const dateObj = new Date(date);
+    dateObj.setHours(0, 0, 0, 0);
+    return await this.sleepModel.findOne({ userId: userId.toString(), date: dateObj }).lean().exec();
+  }
+
+  async getLatestSleep(userId: string) {
+    if (!userId) throw new BadRequestException('userId is required');
+    return await this.sleepModel.findOne({ userId: userId.toString() }).sort({ date: -1 }).lean().exec();
+  }
+
+  async upsertSleep(userId: string, date: string, data: { bedtime?: string; wakeup?: string }) {
+    if (!userId) throw new BadRequestException('userId is required');
+    if (!date) throw new BadRequestException('date is required');
+    const dateObj = new Date(date);
+    dateObj.setHours(0, 0, 0, 0);
+    const setObj: any = {};
+    if (typeof data.bedtime !== 'undefined') setObj.bedtime = data.bedtime;
+    if (typeof data.wakeup !== 'undefined') setObj.wakeup = data.wakeup;
+
+    return await this.sleepModel.findOneAndUpdate(
+      { userId: userId.toString(), date: dateObj },
+      { $set: { ...setObj, userId: userId.toString(), date: dateObj } },
+      { upsert: true, new: true }
+    ).lean().exec();
+  }
+
+  /**
+   * Get sleep schedule for date. If not exists, auto-create using latest saved schedule (or defaults).
+   */
+  async getOrCreateSleepForDate(userId: string, date: string) {
+    if (!userId) throw new BadRequestException('userId is required');
+    if (!date) throw new BadRequestException('date is required');
+    const existing = await this.getSleepByDate(userId, date);
+    if (existing) return existing;
+
+    // Try latest
+    const latest = await this.getLatestSleep(userId).catch(() => null);
+    const defaults = { bedtime: '22:00', wakeup: '07:30' };
+    const createObj = {
+      bedtime: latest?.bedtime ?? defaults.bedtime,
+      wakeup: latest?.wakeup ?? defaults.wakeup,
+    };
+
+    return await this.upsertSleep(userId, date, createObj);
+  }
+
+  /**
+   * Return daily sleepMinutes series for a range ending at endDate for `days` days.
+   * Uses `healthTrackingModel` which stores `sleepMinutes` per day.
+   * Returns array of objects: { date: 'YYYY-MM-DD', sleepMinutes: number }
+   */
+  async getDailySleepSeries(userId: string, endDate?: string, days = 7) {
+    if (!userId) throw new BadRequestException('userId is required');
+    const end = endDate ? new Date(endDate) : new Date();
+    end.setHours(23, 59, 59, 999);
+
+    const start = new Date(end);
+    start.setDate(start.getDate() - (days - 1));
+    start.setHours(0, 0, 0, 0);
+
+    const records = await this.healthTrackingModel.find({
+      userId: userId.toString(),
+      date: { $gte: start, $lte: end }
+    }).lean().exec() as any[];
+
+    // create map dateStr -> sleepMinutes
+    const map: Record<string, number> = {};
+    records.forEach(r => {
+      const d = new Date(r.date);
+      const key = d.toISOString().slice(0,10);
+      map[key] = (r.sleepMinutes || 0);
+    });
+
+    const result: Array<{ date: string; sleepMinutes: number }> = [];
+    for (let i = 0; i < days; i++) {
+      const d = new Date(start);
+      d.setDate(start.getDate() + i);
+      const key = d.toISOString().slice(0,10);
+      result.push({ date: key, sleepMinutes: map[key] ?? 0 });
+    }
+
+    return result;
   }
 
 }

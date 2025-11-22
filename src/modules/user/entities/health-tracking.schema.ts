@@ -20,6 +20,12 @@ export class HealthTracking {
 
   @Prop({ type: Number, default: 0 })
   sleepMinutes: number;
+  
+  @Prop({ type: String, default: '' })
+  bedtime: string;
+
+  @Prop({ type: String, default: '' })
+  wakeup: string;
 }
 
 export type HealthTrackingDocument = HydratedDocument<HealthTracking>;

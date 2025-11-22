@@ -28,6 +28,79 @@ export class UserController {
     }
   }
 
+  /**
+   * Get sleep schedule for authenticated user for a given date
+   * Query param: date=YYYY-MM-DD
+   */
+  @Get('me/sleep')
+  @UseGuards(JwtAuthGuard)
+  async getMySleep(@Req() req: any, @Query('date') date?: string) {
+    const email = req?.user?.email;
+    if (!email) throw new BadRequestException('Cannot determine user from token');
+
+    const user = await this.userService.findOneByEmail(email);
+    if (!user) throw new BadRequestException('User not found');
+
+    if (!date) {
+      // default to today
+      const today = new Date();
+      date = today.toISOString().slice(0, 10);
+    }
+
+    // This will auto-create a record for the date if not exists (using latest/defaults)
+    const record = await this.userService.getOrCreateSleepForDate(user._id.toString(), date);
+    return { data: record || null };
+  }
+
+  @Get('me/sleep/latest')
+  @UseGuards(JwtAuthGuard)
+  async getMyLatestSleep(@Req() req: any) {
+    const email = req?.user?.email;
+    if (!email) throw new BadRequestException('Cannot determine user from token');
+
+    const user = await this.userService.findOneByEmail(email);
+    if (!user) throw new BadRequestException('User not found');
+    const record = await this.userService.getLatestSleep(user._id.toString());
+    return record ? record : null;
+  }
+
+  /**
+   * Get daily sleep minutes series for authenticated user
+   * Query params: endDate=YYYY-MM-DD (optional), days=number (optional, default 7)
+   */
+  @Get('me/sleep/series')
+  @UseGuards(JwtAuthGuard)
+  async getMySleepSeries(@Req() req: any, @Query('endDate') endDate?: string, @Query('days') days?: string) {
+    const email = req?.user?.email;
+    if (!email) throw new BadRequestException('Cannot determine user from token');
+
+    const user = await this.userService.findOneByEmail(email);
+    if (!user) throw new BadRequestException('User not found');
+
+    const n = days ? parseInt(days, 10) : 7;
+    const series = await this.userService.getDailySleepSeries(user._id.toString(), endDate, n);
+    return { data: series };
+  }
+
+  /**
+   * Save sleep schedule for authenticated user for a given date
+   * Body: { date: 'YYYY-MM-DD', bedtime: 'HH:mm', wakeup: 'HH:mm' }
+   */
+  @Post('me/sleep')
+  @UseGuards(JwtAuthGuard)
+  async saveMySleep(@Req() req: any, @Body() body: any) {
+    const email = req?.user?.email;
+    if (!email) throw new BadRequestException('Cannot determine user from token');
+
+    const user = await this.userService.findOneByEmail(email);
+    if (!user) throw new BadRequestException('User not found');
+
+    const { date, bedtime, wakeup } = body || {};
+    if (!date) throw new BadRequestException('date is required');
+    const result = await this.userService.upsertSleep(user._id.toString(), date, { bedtime, wakeup });
+    return { data: result };
+  }
+
   @Get()
   findAll() {
     return this.userService.findAll();
