@@ -6,6 +6,7 @@ import { CycleService } from './cycle.service';
 import { CycleController } from './cycle.controller';
 import { CycleLog, CycleLogSchema } from './entities/cycle-log.schema';
 import { SymptomEntry, SymptomEntrySchema } from './entities/symptom-entry.schema';
+import { UserModule } from '../user/user.module';
 
 @Module({
   imports: [
@@ -14,6 +15,7 @@ import { SymptomEntry, SymptomEntrySchema } from './entities/symptom-entry.schem
       { name: CycleLog.name, schema: CycleLogSchema },
       { name: SymptomEntry.name, schema: SymptomEntrySchema },
     ]),
+    UserModule,
   ],
   controllers: [CycleController],
   providers: [CycleService],
