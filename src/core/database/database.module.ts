@@ -11,7 +11,7 @@ import { MongooseModule } from "@nestjs/mongoose";
         }),
         inject: [ConfigService],
         
-    })], // tao connection va luu vao mongoosemoudle
+    })],
     exports: [MongooseModule], 
     
     
