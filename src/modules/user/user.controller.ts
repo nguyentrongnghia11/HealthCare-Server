@@ -217,4 +217,43 @@ export class UserController {
     }
     return this.userService.remove(id);
   }
+<<<<<<< HEAD
+=======
+
+  /**
+   * Get weekly health statistics for authenticated user
+   * Aggregates last 7 days of steps, water, sleep, and calories burned from running
+   */
+  @Get('me/weekly-stats')
+  @UseGuards(JwtAuthGuard)
+  async getMyWeeklyStats(@Req() req: any, @Query('endDate') endDate?: string) {
+    const email = req?.user?.email;
+    if (!email) throw new BadRequestException('Cannot determine user email from token');
+
+    const user = await this.userService.findOneByEmail(email);
+    if (!user) throw new BadRequestException('User not found');
+
+    // Get health tracking stats (steps, water, sleep)
+    const stats = await this.userService.getWeeklyStats(user._id.toString(), endDate);
+
+    // Calculate calories burned from running (last 7 days)
+    const end = endDate ? new Date(endDate) : new Date();
+    const start = new Date(end);
+    start.setDate(start.getDate() - 6);
+    
+    const startStr = start.toISOString().split('T')[0];
+    const endStr = end.toISOString().split('T')[0];
+
+    const runningStats = await this.runningService.aggregateStats(
+      user._id.toString(),
+      startStr,
+      endStr,
+      'day'
+    );
+
+    stats.caloriesBurned = runningStats.summary.totalCalories;
+
+    return stats;
+  }
+>>>>>>> main
 }

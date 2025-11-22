@@ -3,6 +3,7 @@ import { CreateUserDto } from './dto/create-user.dto';
 import { UpdateUserDto } from './dto/update-user.dto';
 import { InjectModel } from '@nestjs/mongoose';
 import { User, UserDocument } from './entities/user.schema';
+import { HealthTracking, HealthTrackingDocument } from './entities/health-tracking.schema';
 import { Model } from 'mongoose';
 import { OtpService } from '../otp/otp.service';
 import { UpdateUserDetailDto } from './dto/update-user-detail.dto';
@@ -20,7 +21,9 @@ const MACRO_RATIO_MAINTAIN = { PROTEIN: 0.25, FAT: 0.30, CARB: 0.45 }; // Giữ 
 
 @Injectable()
 export class UserService {
-  constructor(@InjectModel(User.name) private readonly userModel: Model<UserDocument>,
+  constructor(
+    @InjectModel(User.name) private readonly userModel: Model<UserDocument>,
+    @InjectModel(HealthTracking.name) private readonly healthTrackingModel: Model<HealthTrackingDocument>,
     private otpService: OtpService
   ) { }
 
@@ -143,5 +146,57 @@ export class UserService {
     return await this.userModel.findByIdAndUpdate(id, { $addToSet: { type: newType } }, { new: true })
   }
 
+  /**
+   * Get weekly health stats (last 7 days from today or specified endDate)
+   * @param userId User ID
+   * @param endDate Optional end date (YYYY-MM-DD), defaults to today
+   */
+  async getWeeklyStats(userId: string, endDate?: string) {
+    if (!userId) throw new BadRequestException('userId is required');
 
+<<<<<<< HEAD
+=======
+    const end = endDate ? new Date(endDate) : new Date();
+    end.setHours(23, 59, 59, 999); // End of day
+    
+    const start = new Date(end);
+    start.setDate(start.getDate() - 6); // 7 days including today
+    start.setHours(0, 0, 0, 0); // Start of day
+
+    const records = await this.healthTrackingModel.find({
+      userId: userId.toString(),
+      date: { $gte: start, $lte: end }
+    }).lean().exec() as any[];
+
+    // Aggregate totals
+    const stats = {
+      steps: records.reduce((sum, r) => sum + (r.steps || 0), 0),
+      caloriesBurned: 0, // Will be calculated from running service
+      waterMl: records.reduce((sum, r) => sum + (r.waterMl || 0), 0),
+      sleepMinutes: records.reduce((sum, r) => sum + (r.sleepMinutes || 0), 0),
+    };
+
+    return stats;
+  }
+
+  /**
+   * Update or create daily health tracking record
+   * @param userId User ID
+   * @param date Date (YYYY-MM-DD)
+   * @param data Health data to update
+   */
+  async updateDailyHealth(userId: string, date: string, data: { steps?: number; waterMl?: number; sleepMinutes?: number }) {
+    if (!userId) throw new BadRequestException('userId is required');
+    if (!date) throw new BadRequestException('date is required');
+
+    const dateObj = new Date(date);
+    dateObj.setHours(0, 0, 0, 0);
+
+    return await this.healthTrackingModel.findOneAndUpdate(
+      { userId: userId.toString(), date: dateObj },
+      { $set: { ...data, userId: userId.toString(), date: dateObj } },
+      { upsert: true, new: true }
+    ).lean().exec();
+  }
+>>>>>>> main
 }
