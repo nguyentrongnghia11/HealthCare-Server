@@ -154,8 +154,6 @@ export class UserService {
   async getWeeklyStats(userId: string, endDate?: string) {
     if (!userId) throw new BadRequestException('userId is required');
 
-<<<<<<< HEAD
-=======
     const end = endDate ? new Date(endDate) : new Date();
     end.setHours(23, 59, 59, 999); // End of day
     
@@ -198,5 +196,5 @@ export class UserService {
       { upsert: true, new: true }
     ).lean().exec();
   }
->>>>>>> main
+
 }

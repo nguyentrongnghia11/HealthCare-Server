@@ -217,8 +217,7 @@ export class UserController {
     }
     return this.userService.remove(id);
   }
-<<<<<<< HEAD
-=======
+
 
   /**
    * Get weekly health statistics for authenticated user
@@ -255,5 +254,5 @@ export class UserController {
 
     return stats;
   }
->>>>>>> main
+
 }
