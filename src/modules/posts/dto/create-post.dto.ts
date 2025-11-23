@@ -1,4 +1,4 @@
-import { IsNotEmpty, IsOptional, IsString } from 'class-validator';
+import { IsNotEmpty, IsOptional, IsString, IsIn } from 'class-validator';
 
 export class CreatePostDto {
   @IsString()
@@ -20,4 +20,9 @@ export class CreatePostDto {
   @IsOptional()
   @IsString()
   date?: string;
+
+  @IsOptional()
+  @IsString()
+  @IsIn(['nutrition', 'sport', 'work_out'])
+  type?: string;
 }
