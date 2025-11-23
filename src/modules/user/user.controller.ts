@@ -85,6 +85,33 @@ export class UserController {
   }
 
   /**
+   * Get sleep statistics with chart data
+   * Query params: startDate=YYYY-MM-DD, endDate=YYYY-MM-DD, groupBy=day|week
+   */
+  @Get('me/sleep/stats')
+  @UseGuards(JwtAuthGuard)
+  async getMySleepStats(
+    @Req() req: any,
+    @Query('startDate') startDate?: string,
+    @Query('endDate') endDate?: string,
+    @Query('groupBy') groupBy?: string
+  ) {
+    const email = req?.user?.email;
+    if (!email) throw new BadRequestException('Cannot determine user from token');
+
+    const user = await this.userService.findOneByEmail(email);
+    if (!user) throw new BadRequestException('User not found');
+
+    if (!startDate || !endDate) {
+      throw new BadRequestException('startDate and endDate are required');
+    }
+
+    const group = groupBy === 'week' ? 'week' : 'day';
+    
+    return await this.userService.getSleepStats(user._id.toString(), startDate, endDate, group);
+  }
+
+  /**
    * Save sleep schedule for authenticated user for a given date
    * Body: { date: 'YYYY-MM-DD', bedtime: 'HH:mm', wakeup: 'HH:mm' }
    */
@@ -384,14 +411,26 @@ export class UserController {
     }
 
     // Calculate averages
-    const avgCaloriesConsumed = Math.round(nutritionStats.summary.totalCalories / 7);
-    const avgSleepHours = parseFloat((healthStats.sleepMinutes / 7 / 60).toFixed(1));
-    const avgCaloriesBurned = Math.round(runningStats.summary.totalCalories / 7);
+    const daysWithCalories = nutritionStats.stats.filter((s: any) => s.calories > 0).length;
+    const daysWithRunning = runningStats.stats.filter((s: any) => s.calories > 0).length;
+    
+    const avgCaloriesConsumed = daysWithCalories > 0 
+      ? nutritionStats.summary.totalCalories / daysWithCalories 
+      : 0;
+    const avgSleepHours = healthStats.daysWithSleep > 0 
+      ? healthStats.sleepMinutes / healthStats.daysWithSleep / 60 
+      : 0;
+    const avgCaloriesBurned = daysWithRunning > 0 
+      ? runningStats.summary.totalCalories / daysWithRunning 
+      : 0;
+    const avgSteps = healthStats.daysWithSteps > 0 
+      ? healthStats.steps / healthStats.daysWithSteps 
+      : 0;
 
     return {
       weeklyCaloriesConsumed: avgCaloriesConsumed,
       weeklySleepHours: avgSleepHours,
-      weeklySteps: healthStats.steps,
+      weeklySteps: avgSteps,
       weeklyAvgCaloriesFromMeals: avgCaloriesConsumed,
       weeklyCaloriesBurned: avgCaloriesBurned,
       nextPeriodPrediction,
@@ -400,7 +439,7 @@ export class UserController {
 
   /**
    * Get today's health summary
-   * Returns: sleep schedule, steps, cycle status, nutrition consumed today
+   * Returns: sleep schedule, distance km, cycle status, nutrition consumed today
    */
   @Get('me/today-summary')
   @UseGuards(JwtAuthGuard)
@@ -416,17 +455,22 @@ export class UserController {
     // 1. Get sleep schedule for today
     const sleepSchedule = await this.userService.getSleepByDate(user._id.toString(), today);
 
-    // 2. Get health tracking (steps) for today
+    // 2. Get health tracking for today
     const healthTracking = await this.userService.getDailyHealth(user._id.toString(), today);
 
-    // 3. Get nutrition consumed today
+    // 3. Get running distance for today
+    const runs = await this.runningService.findRunsByDay(user._id.toString(), today);
+    const totalDistanceKm = (runs || []).reduce((sum, r: any) => sum + (r.distanceKm || 0), 0);
+    const totalCaloriesBurned = (runs || []).reduce((sum, r: any) => sum + (r.calories || 0), 0);
+
+    // 4. Get nutrition consumed today
     const meals = await this.nutritionService.findMealsByDay(user._id.toString(), today);
     const totalCalories = (meals || []).reduce((sum, m: any) => sum + (m.calories || 0), 0);
     const totalProtein = (meals || []).reduce((sum, m: any) => sum + (m.protein || 0), 0);
     const totalCarbs = (meals || []).reduce((sum, m: any) => sum + (m.carbs || 0), 0);
     const totalFat = (meals || []).reduce((sum, m: any) => sum + (m.fat || 0), 0);
 
-    // 4. Get latest cycle log
+    // 5. Get latest cycle log
     const latestCycle = await this.cycleService.getLatestCycleLog(user._id.toString());
     let cycleInfo: { phase: string; dayInCycle: number; daysUntilNextPeriod: number } | null = null;
     
@@ -465,7 +509,8 @@ export class UserController {
         bedtime: sleepSchedule.bedtime,
         wakeup: sleepSchedule.wakeup,
       } : null,
-      steps: healthTracking?.steps || 0,
+      distanceKm: totalDistanceKm,
+      caloriesBurned: Math.round(totalCaloriesBurned),
       waterMl: healthTracking?.waterMl || 0,
       sleepMinutes: healthTracking?.sleepMinutes || 0,
       nutrition: {

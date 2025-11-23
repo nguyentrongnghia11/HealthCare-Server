@@ -168,12 +168,48 @@ export class UserService {
       date: { $gte: start, $lte: end }
     }).lean().exec() as any[];
 
+    // Get sleep schedules for the same period
+    const sleepRecords = await this.sleepModel.find({
+      userId: userId.toString(),
+      date: { $gte: start, $lte: end }
+    }).lean().exec() as any[];
+
+    // Calculate sleep minutes from bedtime/wakeup
+    const calculateSleepMinutes = (bedtime: string, wakeup: string): number => {
+      const [bedHour, bedMin] = bedtime.split(':').map(Number);
+      const [wakeHour, wakeMin] = wakeup.split(':').map(Number);
+      
+      const bedMinutes = bedHour * 60 + bedMin;
+      let wakeMinutes = wakeHour * 60 + wakeMin;
+      
+      if (wakeMinutes < bedMinutes) {
+        wakeMinutes += 24 * 60;
+      }
+      
+      return wakeMinutes - bedMinutes;
+    };
+
+    const totalSleepMinutes = sleepRecords.reduce((sum, r) => {
+      if (r.bedtime && r.wakeup) {
+        return sum + calculateSleepMinutes(r.bedtime, r.wakeup);
+      }
+      return sum;
+    }, 0);
+
+    // Count days with data for each metric
+    const daysWithSteps = records.filter(r => (r.steps || 0) > 0).length;
+    const daysWithWater = records.filter(r => (r.waterMl || 0) > 0).length;
+    const daysWithSleep = sleepRecords.filter(r => r.bedtime && r.wakeup).length;
+
     // Aggregate totals
     const stats = {
       steps: records.reduce((sum, r) => sum + (r.steps || 0), 0),
       caloriesBurned: 0, // Will be calculated from running service
       waterMl: records.reduce((sum, r) => sum + (r.waterMl || 0), 0),
-      sleepMinutes: records.reduce((sum, r) => sum + (r.sleepMinutes || 0), 0),
+      sleepMinutes: totalSleepMinutes,
+      daysWithSteps,
+      daysWithWater,
+      daysWithSleep,
     };
 
     return stats;
@@ -312,6 +348,167 @@ export class UserService {
     }
 
     return result;
+  }
+
+  /**
+   * Get sleep statistics with chart data
+   * @param userId User ID
+   * @param startDate Start date (YYYY-MM-DD)
+   * @param endDate End date (YYYY-MM-DD)
+   * @param groupBy 'day' or 'week'
+   */
+  async getSleepStats(userId: string, startDate: string, endDate: string, groupBy: 'day' | 'week') {
+    if (!userId) throw new BadRequestException('userId is required');
+    if (!startDate || !endDate) throw new BadRequestException('startDate and endDate are required');
+
+    const start = new Date(startDate);
+    start.setHours(0, 0, 0, 0);
+    const end = new Date(endDate);
+    end.setHours(23, 59, 59, 999);
+
+    // Fetch sleep schedules in range
+    const sleepRecords = await this.sleepModel.find({
+      userId: userId.toString(),
+      date: { $gte: start, $lte: end }
+    }).sort({ date: 1 }).lean().exec() as any[];
+
+    // Helper to calculate sleep minutes from bedtime/wakeup
+    const calculateSleepMinutes = (bedtime: string, wakeup: string): number => {
+      const [bedHour, bedMin] = bedtime.split(':').map(Number);
+      const [wakeHour, wakeMin] = wakeup.split(':').map(Number);
+      
+      const bedMinutes = bedHour * 60 + bedMin;
+      let wakeMinutes = wakeHour * 60 + wakeMin;
+      
+      // If wakeup is before bedtime, assume next day
+      if (wakeMinutes < bedMinutes) {
+        wakeMinutes += 24 * 60;
+      }
+      
+      return wakeMinutes - bedMinutes;
+    };
+
+    // Initialize stats map
+    const statsMap = new Map<string, {
+      date: string;
+      sleepMinutes: number;
+      sleepHours: number;
+      bedtime: string | null;
+      wakeup: string | null;
+      nights: number;
+    }>();
+
+    if (groupBy === 'day') {
+      // Initialize all dates in range
+      const current = new Date(start);
+      while (current <= end) {
+        const dateKey = current.toISOString().split('T')[0];
+        statsMap.set(dateKey, {
+          date: dateKey,
+          sleepMinutes: 0,
+          sleepHours: 0,
+          bedtime: null,
+          wakeup: null,
+          nights: 0
+        });
+        current.setDate(current.getDate() + 1);
+      }
+
+      // Populate with actual data
+      sleepRecords.forEach((record: any) => {
+        const dateKey = new Date(record.date).toISOString().split('T')[0];
+        const stat = statsMap.get(dateKey);
+        if (stat && record.bedtime && record.wakeup) {
+          const minutes = calculateSleepMinutes(record.bedtime, record.wakeup);
+          stat.sleepMinutes = minutes;
+          stat.sleepHours = parseFloat((minutes / 60).toFixed(1));
+          stat.bedtime = record.bedtime;
+          stat.wakeup = record.wakeup;
+          stat.nights = 1;
+        }
+      });
+    } else {
+      // Weekly grouping
+      const getMonday = (date: Date): string => {
+        const d = new Date(date);
+        const day = d.getDay();
+        const diff = day === 0 ? -6 : 1 - day;
+        d.setDate(d.getDate() + diff);
+        return d.toISOString().split('T')[0];
+      };
+
+      // Initialize weeks
+      const current = new Date(start);
+      const seenWeeks = new Set<string>();
+      while (current <= end) {
+        const monday = getMonday(current);
+        if (!seenWeeks.has(monday)) {
+          seenWeeks.add(monday);
+          statsMap.set(monday, {
+            date: monday,
+            sleepMinutes: 0,
+            sleepHours: 0,
+            bedtime: null,
+            wakeup: null,
+            nights: 0
+          });
+        }
+        current.setDate(current.getDate() + 1);
+      }
+
+      // Aggregate by week
+      sleepRecords.forEach((record: any) => {
+        const monday = getMonday(new Date(record.date));
+        const stat = statsMap.get(monday);
+        if (stat && record.bedtime && record.wakeup) {
+          const minutes = calculateSleepMinutes(record.bedtime, record.wakeup);
+          stat.sleepMinutes += minutes;
+          stat.nights += 1;
+        }
+      });
+
+      // Calculate averages for weeks
+      statsMap.forEach((stat) => {
+        if (stat.nights > 0) {
+          stat.sleepHours = parseFloat((stat.sleepMinutes / stat.nights / 60).toFixed(1));
+        }
+      });
+    }
+
+    // Convert to array
+    const stats = Array.from(statsMap.values()).map(stat => ({
+      date: stat.date,
+      sleepMinutes: stat.sleepMinutes,
+      sleepHours: stat.sleepHours
+    }));
+
+    // Chart data
+    const chartData = {
+      labels: stats.map(s => s.date),
+      datasets: {
+        sleepHours: stats.map(s => s.sleepHours)
+      }
+    };
+
+    // Summary
+    const totalSleepMinutes = sleepRecords.reduce((sum: number, r: any) => {
+      if (r.bedtime && r.wakeup) {
+        return sum + calculateSleepMinutes(r.bedtime, r.wakeup);
+      }
+      return sum;
+    }, 0);
+
+    const totalNights = sleepRecords.filter((r: any) => r.bedtime && r.wakeup).length;
+    const totalSleepHours = totalSleepMinutes / 60;
+    const averageSleepHours = totalNights > 0 ? totalSleepMinutes / totalNights / 60 : 0;
+
+    const summary = {
+      totalSleepHours,
+      averageSleepHours,
+      totalNights
+    };
+
+    return { stats, chartData, summary };
   }
 
 }

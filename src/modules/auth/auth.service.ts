@@ -1,10 +1,11 @@
-import { Inject, Injectable, InternalServerErrorException } from '@nestjs/common';
+import { Inject, Injectable, InternalServerErrorException, UnauthorizedException, BadRequestException } from '@nestjs/common';
 import { UserService } from '../user/user.service';
 import { JwtService } from '@nestjs/jwt';
 import { PasswordService } from 'src/utils/password.util';
 import { User, UserDocument } from '../user/entities/user.schema';
 import { OAuth2Client } from 'google-auth-library';
 import { generateTokens } from 'src/utils/generateToken.utill';
+import { ChangePasswordDto } from './dto/change-password.dto';
 @Injectable()
 export class AuthService {
 
@@ -188,6 +189,39 @@ export class AuthService {
         const payload_token = { username: existingUser.username, email: existingUser.email, sub: existingUser._id, role: existingUser.role };
         const res = await this.login(payload_token)
         return res;
+    }
+
+    /**
+     * Change password for local account
+     */
+    async changePassword(userId: string, changePasswordDto: ChangePasswordDto) {
+        const user = await this.userService.findOneById(userId);
+        if (!user) {
+            throw new BadRequestException('User not found');
+        }
+
+        // Verify current password
+        if (!user.passwordHash) {
+            throw new BadRequestException('No password set for this account');
+        }
+
+        const isCurrentPasswordValid = changePasswordDto.currentPassword === user.passwordHash;
+        // For production: const isCurrentPasswordValid = await this.passwordService.comparePassword(changePasswordDto.currentPassword, user.passwordHash);
+        
+        if (!isCurrentPasswordValid) {
+            throw new UnauthorizedException('Current password is incorrect');
+        }
+
+        // Check if new password is same as current
+        if (changePasswordDto.currentPassword === changePasswordDto.newPassword) {
+            throw new BadRequestException('New password must be different from current password');
+        }
+
+        // Update password (for now storing plain text, should hash in production)
+        const newPasswordHash = changePasswordDto.newPassword;
+        // For production: const newPasswordHash = await this.passwordService.hashPassword(changePasswordDto.newPassword);
+        
+        await this.userService.update(userId, { passwordHash: newPasswordHash } as any);
     }
 }
 
