@@ -7,4 +7,5 @@ export const PostSchema = new Schema({
   content: { type: String },
   image: { type: String },
   date: { type: String },
+  type: { type: String, enum: ['nutrition', 'sport', 'work_out'], default: '' },
 });
