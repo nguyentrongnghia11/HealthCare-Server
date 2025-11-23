@@ -168,9 +168,9 @@ export class RunningService {
     // Convert map to sorted array with chart-friendly format
     const stats = Array.from(statsMap.values()).map(stat => ({
       date: stat.date,
-      distanceKm: parseFloat(stat.distanceKm.toFixed(1)),
-      calories: Math.round(stat.calories),
-      durationSec: Math.round(stat.durationSec),
+      distanceKm: stat.distanceKm,
+      calories: stat.calories,
+      durationSec: stat.durationSec,
       sessions: stat.sessions
     }));
 
@@ -187,9 +187,9 @@ export class RunningService {
 
     // Calculate summary totals
     const summary = {
-      totalDistanceKm: parseFloat(sessions.reduce((sum: number, s: any) => sum + (s.distanceKm || 0), 0).toFixed(1)),
-      totalCalories: Math.round(sessions.reduce((sum: number, s: any) => sum + (s.calories || 0), 0)),
-      totalDurationSec: Math.round(sessions.reduce((sum: number, s: any) => sum + (s.durationSec || 0), 0)),
+      totalDistanceKm: sessions.reduce((sum: number, s: any) => sum + (s.distanceKm || 0), 0),
+      totalCalories: sessions.reduce((sum: number, s: any) => sum + (s.calories || 0), 0),
+      totalDurationSec: sessions.reduce((sum: number, s: any) => sum + (s.durationSec || 0), 0),
       totalSessions: sessions.length
     };
 

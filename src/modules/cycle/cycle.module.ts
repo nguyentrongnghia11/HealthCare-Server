@@ -1,6 +1,6 @@
 // src/modules/cycle/cycle.module.ts
 
-import { Module } from '@nestjs/common';
+import { Module, forwardRef } from '@nestjs/common';
 import { MongooseModule } from '@nestjs/mongoose'; // <-- Import MongooseModule
 import { CycleService } from './cycle.service';
 import { CycleController } from './cycle.controller';
@@ -15,7 +15,7 @@ import { UserModule } from '../user/user.module';
       { name: CycleLog.name, schema: CycleLogSchema },
       { name: SymptomEntry.name, schema: SymptomEntrySchema },
     ]),
-    UserModule,
+    forwardRef(() => UserModule),
   ],
   controllers: [CycleController],
   providers: [CycleService],
