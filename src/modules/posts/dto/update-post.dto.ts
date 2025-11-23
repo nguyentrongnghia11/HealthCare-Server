@@ -1,4 +1,4 @@
-import { IsOptional, IsString } from 'class-validator';
+import { IsOptional, IsString, IsIn } from 'class-validator';
 
 export class UpdatePostDto {
   @IsOptional()
@@ -20,4 +20,9 @@ export class UpdatePostDto {
   @IsOptional()
   @IsString()
   date?: string;
+
+  @IsOptional()
+  @IsString()
+  @IsIn(['nutrition', 'sport', 'work_out'])
+  type?: string;
 }
