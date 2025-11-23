@@ -6,6 +6,7 @@ import { UpdateUserDto } from './dto/update-user.dto';
 import { UpdateUserDetailDto } from './dto/update-user-detail.dto';
 import { NutritionService } from '../nutrition/nutrition.service';
 import { RunningService } from 'src/running/running.service';
+import { CycleService } from '../cycle/cycle.service';
 import { Types } from 'mongoose';
 
 @Controller('user')
@@ -14,6 +15,7 @@ export class UserController {
     private readonly userService: UserService,
     private nutritionService: NutritionService,
     private runningService: RunningService,
+    private cycleService: CycleService,
   ) {}
 
   @Post()
@@ -326,6 +328,155 @@ export class UserController {
     stats.caloriesBurned = runningStats.summary.totalCalories;
 
     return stats;
+  }
+
+  /**
+   * Get comprehensive weekly summary
+   * Returns: avg calories consumed, avg sleep hours, total steps, avg calories from meals, period prediction
+   */
+  @Get('me/weekly-summary')
+  @UseGuards(JwtAuthGuard)
+  async getMyWeeklySummary(@Req() req: any, @Query('endDate') endDate?: string) {
+    const email = req?.user?.email;
+    if (!email) throw new BadRequestException('Cannot determine user email from token');
+
+    const user = await this.userService.findOneByEmail(email);
+    if (!user) throw new BadRequestException('User not found');
+
+    const end = endDate ? new Date(endDate) : new Date();
+    const start = new Date(end);
+    start.setDate(start.getDate() - 6); // Last 7 days
+    
+    const startStr = start.toISOString().split('T')[0];
+    const endStr = end.toISOString().split('T')[0];
+
+    // 1. Get health tracking (steps, sleep)
+    const healthStats = await this.userService.getWeeklyStats(user._id.toString(), endStr);
+
+    // 2. Get nutrition stats (calories consumed)
+    const nutritionStats = await this.nutritionService.aggregateStats(
+      user._id.toString(),
+      startStr,
+      endStr,
+      'day'
+    );
+
+    // 3. Get running stats (calories burned)
+    const runningStats = await this.runningService.aggregateStats(
+      user._id.toString(),
+      startStr,
+      endStr,
+      'day'
+    );
+
+    // 4. Get period prediction (latest cycle log)
+    const latestCycle = await this.cycleService.getLatestCycleLog(user._id.toString());
+    let nextPeriodPrediction: string | null = null;
+    
+    if (latestCycle && latestCycle.startDate) {
+      // Simple prediction: assume 28-day cycle
+      const avgCycleLength = 28;
+      const lastPeriodDate = new Date(latestCycle.startDate);
+      const predictedDate = new Date(lastPeriodDate);
+      predictedDate.setDate(lastPeriodDate.getDate() + avgCycleLength);
+      
+      nextPeriodPrediction = predictedDate.toISOString().split('T')[0];
+    }
+
+    // Calculate averages
+    const avgCaloriesConsumed = Math.round(nutritionStats.summary.totalCalories / 7);
+    const avgSleepHours = parseFloat((healthStats.sleepMinutes / 7 / 60).toFixed(1));
+    const avgCaloriesBurned = Math.round(runningStats.summary.totalCalories / 7);
+
+    return {
+      weeklyCaloriesConsumed: avgCaloriesConsumed,
+      weeklySleepHours: avgSleepHours,
+      weeklySteps: healthStats.steps,
+      weeklyAvgCaloriesFromMeals: avgCaloriesConsumed,
+      weeklyCaloriesBurned: avgCaloriesBurned,
+      nextPeriodPrediction,
+    };
+  }
+
+  /**
+   * Get today's health summary
+   * Returns: sleep schedule, steps, cycle status, nutrition consumed today
+   */
+  @Get('me/today-summary')
+  @UseGuards(JwtAuthGuard)
+  async getMyTodaySummary(@Req() req: any, @Query('date') date?: string) {
+    const email = req?.user?.email;
+    if (!email) throw new BadRequestException('Cannot determine user email from token');
+
+    const user = await this.userService.findOneByEmail(email);
+    if (!user) throw new BadRequestException('User not found');
+
+    const today = date || new Date().toISOString().split('T')[0];
+
+    // 1. Get sleep schedule for today
+    const sleepSchedule = await this.userService.getSleepByDate(user._id.toString(), today);
+
+    // 2. Get health tracking (steps) for today
+    const healthTracking = await this.userService.getDailyHealth(user._id.toString(), today);
+
+    // 3. Get nutrition consumed today
+    const meals = await this.nutritionService.findMealsByDay(user._id.toString(), today);
+    const totalCalories = (meals || []).reduce((sum, m: any) => sum + (m.calories || 0), 0);
+    const totalProtein = (meals || []).reduce((sum, m: any) => sum + (m.protein || 0), 0);
+    const totalCarbs = (meals || []).reduce((sum, m: any) => sum + (m.carbs || 0), 0);
+    const totalFat = (meals || []).reduce((sum, m: any) => sum + (m.fat || 0), 0);
+
+    // 4. Get latest cycle log
+    const latestCycle = await this.cycleService.getLatestCycleLog(user._id.toString());
+    let cycleInfo: { phase: string; dayInCycle: number; daysUntilNextPeriod: number } | null = null;
+    
+    if (latestCycle && latestCycle.startDate) {
+      const todayDate = new Date(today);
+      const lastPeriodDate = new Date(latestCycle.startDate);
+      const daysSinceLastPeriod = Math.floor((todayDate.getTime() - lastPeriodDate.getTime()) / (1000 * 60 * 60 * 24));
+      
+      // Simple cycle calculation (assume 28-day cycle)
+      const avgCycleLength = 28;
+      const dayInCycle = (daysSinceLastPeriod % avgCycleLength) + 1;
+      const daysUntilNext = avgCycleLength - daysSinceLastPeriod;
+      
+      // Determine phase based on day in cycle
+      let phase = 'unknown';
+      if (dayInCycle >= 1 && dayInCycle <= 5) {
+        phase = 'menstruation';
+      } else if (dayInCycle >= 6 && dayInCycle <= 13) {
+        phase = 'follicular';
+      } else if (dayInCycle >= 14 && dayInCycle <= 16) {
+        phase = 'ovulation';
+      } else {
+        phase = 'luteal';
+      }
+      
+      cycleInfo = {
+        phase,
+        dayInCycle,
+        daysUntilNextPeriod: daysUntilNext > 0 ? daysUntilNext : avgCycleLength + daysUntilNext,
+      };
+    }
+
+    return {
+      date: today,
+      sleep: sleepSchedule ? {
+        bedtime: sleepSchedule.bedtime,
+        wakeup: sleepSchedule.wakeup,
+      } : null,
+      steps: healthTracking?.steps || 0,
+      waterMl: healthTracking?.waterMl || 0,
+      sleepMinutes: healthTracking?.sleepMinutes || 0,
+      nutrition: {
+        totalCalories,
+        totalProtein,
+        totalCarbs,
+        totalFat,
+        mealsCount: meals.length,
+      },
+      cycle: cycleInfo,
+    };
   }
 
 }

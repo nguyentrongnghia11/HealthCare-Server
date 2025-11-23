@@ -1,4 +1,4 @@
-import { Module } from '@nestjs/common';
+import { Module, forwardRef } from '@nestjs/common';
 import { UserService } from './user.service';
 import { UserController } from './user.controller';
 import { MongoModule } from 'src/core/database/database.module';
@@ -9,6 +9,7 @@ import { SleepSchedule, SleepScheduleSchema } from './entities/sleep.schema';
 import { OtpModule } from '../otp/otp.module';
 import { NutritionModule } from '../nutrition/nutrition.module';
 import { RunningModule } from 'src/running/running.module';
+import { CycleModule } from '../cycle/cycle.module';
 
 @Module({
   imports: [
@@ -21,6 +22,7 @@ import { RunningModule } from 'src/running/running.module';
     OtpModule,
     NutritionModule,
     RunningModule,
+    forwardRef(() => CycleModule),
   ],
   controllers: [UserController],
   providers: [UserService],
